@@ -26,24 +26,27 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- ส่วนที่ 1: วาง Firebase Config ตรงนี้ ---
+        // --- ส่วนที่ 1: วาง Firebase Config ตรงนี้ (ใส่ให้เรียบร้อยแล้วครับ) ---
         const firebaseConfig = {
-            // apiKey: "AIzaSy...",
-            // authDomain: "your-project.firebaseapp.com",
-            // projectId: "your-project",
-            // storageBucket: "your-project.appspot.com",
-            // messagingSenderId: "...",
-            // appId: "..."
+            apiKey: "AIzaSyCxcwdUQlVewO2C0fyCXhVYCk7adOlb7Bw",
+            authDomain: "sareport-9a853.firebaseapp.com",
+            projectId: "sareport-9a853",
+            storageBucket: "sareport-9a853.firebasestorage.app",
+            messagingSenderId: "420538767390",
+            appId: "1:420538767390:web:3b07cb2bd418b84da0360f",
+            measurementId: "G-HT4N05EQQE"
         };
+        // --- จบส่วน Config ---
 
         let db = null;
         try {
+            // เช็คว่ามีการใส่ Config หรือยัง (เช็คจาก apiKey)
             if (firebaseConfig.apiKey) {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 console.log("Firebase initialized successfully");
             } else {
-                console.warn("No Firebase Config found. Using Mock Data.");
+                console.warn("ยังไม่พบ Firebase Config ระบบจะใช้ข้อมูลจำลอง (Mock Data) ไปก่อนครับ");
             }
         } catch (e) {
             console.error("Firebase init error:", e);
@@ -55,7 +58,7 @@
             getDocs: getDocs,
             addDoc: addDoc,
             updateDoc: updateDoc,
-            deleteDoc: deleteDoc, // เพิ่ม deleteDoc
+            deleteDoc: deleteDoc,
             doc: doc,
             collection: collection
         };
@@ -76,6 +79,7 @@
             <div class="text-center space-y-4">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p class="text-slate-500 font-medium">Loading Dashboard...</p>
+                <p class="text-sm text-slate-400">Connecting to Firebase...</p>
             </div>
         </div>
     </div>
