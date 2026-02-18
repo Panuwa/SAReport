@@ -3,29 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Presale & BAU Performance Dashboard</title>
+    <title>Presale & BAU Performance Dashboard (Firebase)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React & ReactDOM (Cloudflare CDN - Highly Reliable) -->
+    <!-- React & ReactDOM -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     
-    <!-- Prop Types (Required dependency for Recharts) -->
+    <!-- Prop Types (Required for Recharts) -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
     
-    <!-- Recharts (Cloudflare CDN - Stable Version 2.12.3) -->
+    <!-- Recharts -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.3/Recharts.min.js"></script>
     
-    <!-- Lucide React (Specific stable UMD version) -->
-    <script crossorigin src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
-
-    <!-- Babel for JSX transformation -->
+    <!-- Babel -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
+
+    <!-- Firebase SDKs (Modular) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // --- ส่วนที่ 1: วาง Firebase Config ตรงนี้ ---
+        const firebaseConfig = {
+            // apiKey: "AIzaSy...",
+            // authDomain: "your-project.firebaseapp.com",
+            // projectId: "your-project",
+            // storageBucket: "your-project.appspot.com",
+            // messagingSenderId: "...",
+            // appId: "..."
+        };
+
+        let db = null;
+        try {
+            if (firebaseConfig.apiKey) {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                console.log("Firebase initialized successfully");
+            } else {
+                console.warn("No Firebase Config found. Using Mock Data.");
+            }
+        } catch (e) {
+            console.error("Firebase init error:", e);
+        }
+
+        // Expose DB functions to global window for React to use
+        window.dbService = {
+            db: db,
+            getDocs: getDocs,
+            addDoc: addDoc, // เพิ่ม function addDoc ให้ React เรียกใช้ได้
+            collection: collection
+        };
+    </script>
 
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        /* Animation for Modal */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-overlay { animation: fadeIn 0.2s ease-out; }
+        .modal-content { animation: slideUp 0.3s ease-out; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -34,336 +73,606 @@
             <div class="text-center space-y-4">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p class="text-slate-500 font-medium">Loading Dashboard...</p>
-                <p class="text-xs text-slate-400">Connecting to libraries...</p>
             </div>
         </div>
     </div>
 
     <script type="text/babel">
-        // --- Library Stability Check ---
-        // ตรวจสอบว่า Library สำคัญโหลดครบหรือไม่
-        const requiredLibs = {
-            'React': window.React,
-            'ReactDOM': window.ReactDOM,
-            'Recharts': window.Recharts,
-            'lucideReact': window.lucideReact
+        // --- Custom Icons ---
+        const Icon = ({ path, color = "currentColor", size = 24, className="" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            Dashboard: <Icon path={<><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></>} />,
+            Dollar: <Icon path={<><line x1="12" x2="12" y1="2" y2="22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>} />,
+            Trending: <Icon path={<><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></>} />,
+            Clock: <Icon path={<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>} />,
+            Target: <Icon path={<><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>} />,
+            Filter: <Icon path={<><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></>} />,
+            Eye: <Icon path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>} />,
+            EyeOff: <Icon path={<><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.9 3.23" /><path d="M17.73 17.73a10.43 10.43 0 0 1-5.73 1.27c-7 0-10-7-10-7a13.16 13.16 0 0 1 3.23-1.9" /><line x1="2" x2="22" y1="2" y2="22" /></>} />,
+            User: <Icon path={<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>} />,
+            UserCheck: <Icon path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></>} />,
+            Briefcase: <Icon path={<><rect width="20" height="14" x="2" y="7" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>} />,
+            Plus: <Icon path={<><path d="M5 12h14" /><path d="M12 5v14" /></>} />,
+            X: <Icon path={<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>} />,
+            Lock: <Icon path={<><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>} />,
+            LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />
         };
 
-        const missingLibs = Object.keys(requiredLibs).filter(key => !requiredLibs[key]);
+        const { useState, useEffect, useMemo } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
-        if (missingLibs.length > 0) {
-            console.error('Missing Libraries:', missingLibs);
-            document.getElementById('root').innerHTML = `
-                <div class="flex items-center justify-center min-h-screen bg-red-50 p-4">
-                    <div class="bg-white p-6 rounded-lg shadow-lg border border-red-200 max-w-md w-full text-center">
-                        <div class="text-red-500 mb-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
-                        <h2 class="text-xl font-bold text-red-700 mb-2">Failed to load libraries</h2>
-                        <p class="text-slate-600 mb-4">
-                            The following components could not be loaded:<br>
-                            <code class="bg-red-100 px-2 py-1 rounded text-red-800 font-mono text-sm mt-2 inline-block">${missingLibs.join(', ')}</code>
-                        </p>
-                        <p class="text-sm text-slate-500">
-                            Please check your internet connection or try refreshing the page.
-                            <br>Ensure you are not blocking CDNs (cdnjs/unpkg).
-                        </p>
-                        <button onclick="window.location.reload()" class="mt-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors w-full">
-                            Reload Page
-                        </button>
-                    </div>
-                </div>
-            `;
-            throw new Error(`Critical: Missing libraries [${missingLibs.join(', ')}]`);
-        }
-
-        const { useState, useMemo } = React;
-        
-        // Destructure Recharts
-        const { 
-            BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-            PieChart, Pie, Cell 
-        } = window.Recharts;
-
-        // Destructure Lucide Icons
-        const { 
-            LayoutDashboard, TrendingUp, Briefcase, Clock, CheckCircle2, 
-            Filter, Calendar, DollarSign, Target, User, Users, Eye, EyeOff, UserCheck 
-        } = window.lucideReact;
-
+        // --- Mock Data ---
         const MOCK_DATA = [
-            // W07
-            { id: 1, week: 'W07', date: '2026-02-10', quarter: 'Q1', category: 'Presale', task: 'Project Alpha', customer: 'ABC Corp', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'High', value: 2000000, hours: 0, okr: 'Yes' },
-            { id: 2, week: 'W07', date: '2026-02-12', quarter: 'Q1', category: 'BAU', task: 'System Update', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 8, okr: 'Yes' },
-            { id: 3, week: 'W07', date: '2026-02-13', quarter: 'Q1', category: 'Presale', task: 'Project Gamma', customer: 'XYZ Ltd', owner: 'Panuwat', projectManager: 'Somsak', status: 'Proposal', priority: 'High', value: 500000, hours: 0, okr: 'No' },
-            // W08
-            { id: 4, week: 'W08', date: '2026-02-18', quarter: 'Q1', category: 'Presale', task: 'OneWeb Test Plan', customer: 'NT / Maritime', owner: 'Panuwat', projectManager: 'Suda', status: 'Bit', priority: 'High', value: 1500000, hours: 0, okr: 'No' },
-            { id: 5, week: 'W08', date: '2026-02-19', quarter: 'Q1', category: 'BAU', task: 'Weekly Meeting', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 2, okr: 'Yes' },
-            { id: 6, week: 'W08', date: '2026-02-20', quarter: 'Q1', category: 'Presale', task: 'Amazon LEO', customer: 'IFEC Customer', owner: 'Panuwat', projectManager: 'Arnon', status: 'Lead', priority: 'High', value: 3000000, hours: 0, okr: 'Yes' },
-            { id: 7, week: 'W08', date: '2026-02-21', quarter: 'Q1', category: 'BAU', task: 'Support Ticket #44', customer: 'Kbank', owner: 'Panuwat', projectManager: 'Arnon', status: 'In Progress', priority: 'Low', value: 0, hours: 4, okr: 'No' },
-            // W09 (Future Mock)
-            { id: 8, week: 'W09', date: '2026-02-25', quarter: 'Q1', category: 'Presale', task: 'New Hub Setup', customer: 'True', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'Medium', value: 1200000, hours: 0, okr: 'Yes' },
+            { id: 1, week: 'W07', date: '2026-02-10', quarter: 'Q1', category: 'Presale', task: 'Project Alpha', customer: 'ABC Corp', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'High', value: 2000000, hours: 0, okr: 'Yes', nextWeek: 'Kickoff meeting' },
+            { id: 2, week: 'W07', date: '2026-02-12', quarter: 'Q1', category: 'BAU', task: 'System Update', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 8, okr: 'Yes', nextWeek: 'Monitor logs' },
+            { id: 3, week: 'W07', date: '2026-02-13', quarter: 'Q1', category: 'Presale', task: 'Project Gamma', customer: 'XYZ Ltd', owner: 'Panuwat', projectManager: 'Somsak', status: 'Proposal', priority: 'High', value: 500000, hours: 0, okr: 'No', nextWeek: 'Submit pricing' },
+            { id: 4, week: 'W08', date: '2026-02-18', quarter: 'Q1', category: 'Presale', task: 'OneWeb Test Plan', customer: 'NT / Maritime', owner: 'Panuwat', projectManager: 'Suda', status: 'Bit', priority: 'High', value: 1500000, hours: 0, okr: 'No', nextWeek: 'Field test @ Chonburi' },
+            { id: 5, week: 'W08', date: '2026-02-19', quarter: 'Q1', category: 'BAU', task: 'Weekly Meeting', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 2, okr: 'Yes', nextWeek: 'Prepare slides' },
+            { id: 6, week: 'W08', date: '2026-02-20', quarter: 'Q1', category: 'Presale', task: 'Amazon LEO', customer: 'IFEC Customer', owner: 'Panuwat', projectManager: 'Arnon', status: 'Lead', priority: 'High', value: 3000000, hours: 0, okr: 'Yes', nextWeek: 'Demo session' },
+            { id: 7, week: 'W08', date: '2026-02-21', quarter: 'Q1', category: 'BAU', task: 'Support Ticket #44', customer: 'Kbank', owner: 'Panuwat', projectManager: 'Arnon', status: 'In Progress', priority: 'Low', value: 0, hours: 4, okr: 'No', nextWeek: 'Close ticket' },
+            { id: 8, week: 'W09', date: '2026-02-25', quarter: 'Q1', category: 'Presale', task: 'New Hub Setup', customer: 'True', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'Medium', value: 1200000, hours: 0, okr: 'Yes', nextWeek: 'Install hardware' },
         ];
 
         const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+        // --- Helper to get Week Number ---
+        const getWeekNumber = (dateStr) => {
+            const date = new Date(dateStr);
+            const onejan = new Date(date.getFullYear(), 0, 1);
+            const week = Math.ceil((((date - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+            return `W${week.toString().padStart(2, '0')}`;
+        };
+
+        const getQuarter = (dateStr) => {
+             const date = new Date(dateStr);
+             const month = date.getMonth() + 1;
+             return 'Q' + Math.ceil(month / 3);
+        };
+
+        // --- Login Component ---
+        const LoginScreen = ({ onLogin }) => {
+            return (
+                <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
+                        <div className="mb-6 flex justify-center">
+                            <div className="bg-blue-100 p-4 rounded-full text-blue-600">
+                                {Icons.Lock}
+                            </div>
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome Back</h2>
+                        <p className="text-slate-500 mb-8">Please select your role to continue</p>
+                        
+                        <div className="space-y-4">
+                            <button 
+                                onClick={() => onLogin('admin')}
+                                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                            >
+                                {Icons.UserCheck} Login as Admin
+                            </button>
+                            <button 
+                                onClick={() => onLogin('viewer')}
+                                className="w-full py-3 px-4 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                {Icons.Eye} Login as Viewer
+                            </button>
+                        </div>
+                        <p className="mt-6 text-xs text-slate-400">
+                            *Admin can edit data. Viewer is read-only.
+                        </p>
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
+            const [user, setUser] = useState(null); // { role: 'admin' | 'viewer' }
+            const [data, setData] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [isFirebase, setIsFirebase] = useState(false);
+            
             const [selectedQuarter, setSelectedQuarter] = useState('Q1');
             const [selectedWeek, setSelectedWeek] = useState('All');
-            const [showDone, setShowDone] = useState(false); // Default hide 'Done'
+            const [showDone, setShowDone] = useState(false);
+            const [showModal, setShowModal] = useState(false);
 
-            // Filtering Logic
-            const filteredData = useMemo(() => {
-                return MOCK_DATA.filter(item => {
-                const qMatch = selectedQuarter === 'All' || item.quarter === selectedQuarter;
-                const wMatch = selectedWeek === 'All' || item.week === selectedWeek;
-                
-                // Status Filter logic
-                const statusMatch = showDone ? true : item.status !== 'Done'; 
+            // New Activity Form State with Next Week Detail
+            const [newActivity, setNewActivity] = useState({
+                date: new Date().toISOString().split('T')[0],
+                category: 'Presale',
+                task: '',
+                customer: '',
+                owner: 'Panuwat',
+                projectManager: '',
+                priority: 'Medium',
+                status: 'Proposal',
+                value: 0,
+                okr: 'Yes',
+                nextWeek: '' // New Field
+            });
 
-                return qMatch && wMatch && statusMatch;
-                });
-            }, [selectedQuarter, selectedWeek, showDone]);
-
-            // KPIs
-            const totalPresaleValue = filteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? curr.value : 0), 0);
-            const totalBAUHours = filteredData.reduce((acc, curr) => acc + (curr.category === 'BAU' ? curr.hours : 0), 0);
-            const okrCompletion = Math.round((filteredData.filter(d => d.okr === 'Yes').length / filteredData.length) * 100) || 0;
-            const winRate = Math.round((filteredData.filter(d => d.category === 'Presale' && d.status === 'Won').length / 
-                            filteredData.filter(d => d.category === 'Presale').length || 0) * 100);
-
-            // Chart Data: Weekly Performance
-            const weeklyPerformance = useMemo(() => {
-                const weeks = [...new Set(MOCK_DATA.map(d => d.week))].sort();
-                return weeks.map(w => {
-                const items = filteredData.filter(d => d.week === w);
-                return {
-                    name: w,
-                    presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? curr.value : 0), 0) / 1000000, // In Millions
-                    bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? curr.hours : 0), 0)
+            // Fetch Data
+            useEffect(() => {
+                const fetchData = async () => {
+                    const { db, getDocs, collection } = window.dbService || {};
+                    if (db) {
+                        try {
+                            const querySnapshot = await getDocs(collection(db, "tasks"));
+                            const firebaseData = [];
+                            querySnapshot.forEach((doc) => firebaseData.push({ id: doc.id, ...doc.data() }));
+                            if (firebaseData.length > 0) {
+                                setData(firebaseData);
+                                setIsFirebase(true);
+                            } else {
+                                setData(MOCK_DATA);
+                            }
+                        } catch (error) {
+                            console.error("Error fetching:", error);
+                            setData(MOCK_DATA);
+                        }
+                    } else {
+                        setData(MOCK_DATA);
+                    }
+                    setLoading(false);
                 };
+                
+                // Only fetch if user is logged in (simulated delay moved to after login for smoother UX, but kept here for data readiness)
+                if (user) {
+                     // In real app, might fetch here. For now, we simulate fetch on mount but show after login.
+                }
+                setTimeout(fetchData, 500);
+            }, []);
+
+            // Handle Add Activity
+            const handleAddSubmit = async (e) => {
+                e.preventDefault();
+                const week = getWeekNumber(newActivity.date);
+                const quarter = getQuarter(newActivity.date);
+                
+                const payload = {
+                    ...newActivity,
+                    week,
+                    quarter,
+                    value: Number(newActivity.value),
+                    hours: newActivity.category === 'BAU' ? Number(newActivity.value) : 0,
+                    value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
+                };
+
+                const { db, addDoc, collection } = window.dbService || {};
+
+                if (db && isFirebase) {
+                    try {
+                        const docRef = await addDoc(collection(db, "tasks"), payload);
+                        setData([...data, { id: docRef.id, ...payload }]);
+                        alert("Added to Firebase successfully!");
+                    } catch (e) {
+                        console.error("Error adding document: ", e);
+                        alert("Error adding to Firebase.");
+                    }
+                } else {
+                    // Local Mock Update
+                    setData([...data, { id: Date.now(), ...payload }]);
+                    alert("Added to local view (Mock Data).");
+                }
+                setShowModal(false);
+                setNewActivity({...newActivity, task: '', customer: '', value: 0, nextWeek: ''});
+            };
+
+            // Calculation Logic
+            const filteredData = useMemo(() => {
+                return data.filter(item => {
+                    const qMatch = selectedQuarter === 'All' || item.quarter === selectedQuarter;
+                    const wMatch = selectedWeek === 'All' || item.week === selectedWeek;
+                    const statusMatch = showDone ? true : item.status !== 'Done'; 
+                    return qMatch && wMatch && statusMatch;
                 });
-            }, [filteredData]);
+            }, [data, selectedQuarter, selectedWeek, showDone]);
+
+            const totalPresaleValue = filteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value) : 0), 0);
+            const totalBAUHours = filteredData.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours) : 0), 0);
+            
+            const presaleItems = filteredData.filter(d => d.category === 'Presale');
+            const winRate = presaleItems.length > 0 
+                ? Math.round((presaleItems.filter(d => d.status === 'Won').length / presaleItems.length) * 100) 
+                : 0;
+            
+            const okrItems = filteredData.filter(d => d.okr);
+            const okrCompletion = okrItems.length > 0
+                ? Math.round((filteredData.filter(d => d.okr === 'Yes').length / filteredData.length) * 100)
+                : 0;
+
+            const weeklyPerformance = useMemo(() => {
+                const weeks = [...new Set(data.map(d => d.week))].sort();
+                return weeks.map(w => {
+                    const items = filteredData.filter(d => d.week === w);
+                    return {
+                        name: w,
+                        presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value) : 0), 0) / 1000000, 
+                        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours) : 0), 0)
+                    };
+                });
+            }, [filteredData, data]);
 
             const statusData = useMemo(() => {
                 const counts = {};
                 filteredData.forEach(d => {
-                counts[d.status] = (counts[d.status] || 0) + 1;
+                    counts[d.status] = (counts[d.status] || 0) + 1;
                 });
                 return Object.entries(counts).map(([name, value]) => ({ name, value }));
             }, [filteredData]);
 
+            // Authentication Handler
+            if (!user) {
+                return <LoginScreen onLogin={(role) => setUser({ role })} />;
+            }
+
+            if (loading) return <div className="text-center p-10 text-slate-500">Loading Data...</div>;
+
             return (
-                <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <LayoutDashboard className="text-blue-600" />
-                        Presale & BAU Performance
-                    </h1>
-                    <p className="text-slate-500">ติดตามผลงานของ Owner (Panuwat)</p>
-                    </div>
+                <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900 relative">
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                <span className="text-blue-600">{Icons.Dashboard}</span>
+                                Presale & BAU Performance
+                            </h1>
+                            <div className="flex gap-2 items-center mt-1">
+                                <span className="text-slate-500 text-sm flex items-center gap-1">
+                                    {user.role === 'admin' ? Icons.UserCheck : Icons.Eye} 
+                                    Logged in as: <strong className="capitalize">{user.role}</strong>
+                                </span>
+                                <span className="text-slate-300">|</span>
+                                <p className="text-slate-500 text-sm">Owner: Panuwat</p>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${isFirebase ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                                    {isFirebase ? '● Live Data' : '○ Mock Data'}
+                                </span>
+                            </div>
+                        </div>
 
-                    <div className="flex flex-wrap gap-3 items-center">
-                        {/* Toggle Show/Hide Done */}
-                        <button 
-                        onClick={() => setShowDone(!showDone)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                            showDone 
-                            ? 'bg-slate-200 text-slate-700 border-slate-300' 
-                            : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                        }`}
-                        >
-                        {showDone ? <Eye size={16} /> : <EyeOff size={16} />}
-                        {showDone ? 'Showing Done Tasks' : 'Hiding Done Tasks'}
-                        </button>
+                        <div className="flex flex-wrap gap-3 items-center">
+                            {user.role === 'admin' && (
+                                <button 
+                                    onClick={() => setShowModal(true)}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-colors"
+                                >
+                                    {Icons.Plus}
+                                    Add Activity
+                                </button>
+                            )}
 
-                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm text-sm">
-                        <Filter size={16} className="text-slate-400" />
-                        <select 
-                        value={selectedWeek} 
-                        onChange={(e) => setSelectedWeek(e.target.value)}
-                        className="outline-none bg-transparent cursor-pointer"
-                        >
-                        <option value="All">All Weeks</option>
-                        <option value="W07">Week 07</option>
-                        <option value="W08">Week 08</option>
-                        <option value="W09">Week 09</option>
-                        </select>
-                    </div>
-                    </div>
-                </div>
-
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                        <DollarSign size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">Active Pipeline</p>
-                        <h3 className="text-xl font-bold">{(totalPresaleValue / 1000000).toFixed(2)}M</h3>
-                    </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                        <TrendingUp size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">Win Rate</p>
-                        <h3 className="text-xl font-bold">{winRate}%</h3>
-                    </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                        <Clock size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">Active Man-Hours</p>
-                        <h3 className="text-xl font-bold">{totalBAUHours} Hrs</h3>
-                    </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
-                        <Target size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">OKR Progress</p>
-                        <h3 className="text-xl font-bold">{okrCompletion}%</h3>
-                    </div>
-                    </div>
-                </div>
-
-                {/* Main Charts Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <h4 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
-                        <Briefcase size={18} className="text-blue-500" />
-                        Weekly Performance (Owner)
-                    </h4>
-                    <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={weeklyPerformance}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                            <YAxis axisLine={false} tickLine={false} />
-                            <Tooltip />
-                            <Legend iconType="circle" />
-                            <Bar dataKey="presale" name="Presale (M THB)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="bau" name="BAU Hours" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <h4 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
-                        <CheckCircle2 size={18} className="text-emerald-500" />
-                        Task Status Overview
-                    </h4>
-                    <div className="h-[300px] flex items-center justify-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                            data={statusData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={90}
-                            paddingAngle={5}
-                            dataKey="value"
+                            <button 
+                                onClick={() => setShowDone(!showDone)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                                    showDone ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                }`}
                             >
-                            {statusData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                            </Pie>
-                            <Tooltip />
-                            <Legend />
-                        </PieChart>
-                        </ResponsiveContainer>
+                                {showDone ? Icons.Eye : Icons.EyeOff}
+                                {showDone ? 'Showing Done' : 'Hiding Done'}
+                            </button>
+                            
+                            <button 
+                                onClick={() => setUser(null)}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
+                            >
+                                {Icons.LogOut}
+                                Logout
+                            </button>
+                        </div>
                     </div>
-                    </div>
-                </div>
 
-                {/* Detail Table */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div className="p-6 border-b border-slate-100">
-                    <h4 className="font-bold text-slate-700">Activity Log</h4>
+                    {/* Filter Bar (Moved here for better layout on mobile) */}
+                    <div className="flex justify-end mb-6">
+                        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm text-sm">
+                            <span className="text-slate-400">{Icons.Filter}</span>
+                            <select 
+                                value={selectedWeek} 
+                                onChange={(e) => setSelectedWeek(e.target.value)}
+                                className="outline-none bg-transparent cursor-pointer"
+                            >
+                                <option value="All">All Weeks</option>
+                                {[...new Set(data.map(d=>d.week))].sort().map(w => <option key={w} value={w}>{w}</option>)}
+                            </select>
+                        </div>
                     </div>
-                    <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                        <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                            <th className="px-6 py-4 font-semibold">Week</th>
-                            <th className="px-6 py-4 font-semibold">Category</th>
-                            <th className="px-6 py-4 font-semibold">Task/Project</th>
-                            <th className="px-6 py-4 font-semibold">Customer</th>
-                            <th className="px-6 py-4 font-semibold">Owner</th>
-                            <th className="px-6 py-4 font-semibold">Project Manager</th>
-                            <th className="px-6 py-4 font-semibold">Priority</th>
-                            <th className="px-6 py-4 font-semibold text-center">Status</th>
-                            <th className="px-6 py-4 font-semibold text-right">Val/Hrs</th>
-                        </tr>
-                        </thead>
-                        <tbody className="text-sm divide-y divide-slate-100">
-                        {filteredData.map((row) => (
-                            <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 font-medium text-slate-400">{row.week}</td>
-                            <td className="px-6 py-4">
-                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                row.category === 'Presale' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-                                }`}>
-                                {row.category}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4">
-                                <div className="font-bold text-slate-700">{row.task}</div>
-                                <div className="text-xs text-slate-400">{row.date}</div>
-                            </td>
-                            <td className="px-6 py-4 text-slate-600">{row.customer}</td>
-                            <td className="px-6 py-4 text-slate-600 font-medium flex items-center gap-1">
-                                <UserCheck size={14} className="text-blue-400" />
-                                {row.owner}
-                            </td>
-                            <td className="px-6 py-4 text-slate-600 font-medium flex items-center gap-1">
-                                <User size={14} className="text-indigo-400" />
-                                {row.projectManager}
-                            </td>
-                            <td className="px-6 py-4">
-                                <span className={`text-xs font-bold px-2 py-1 rounded-sm ${
-                                    row.priority === 'High' ? 'text-rose-600 bg-rose-50' : 
-                                    row.priority === 'Medium' ? 'text-amber-600 bg-amber-50' : 'text-slate-500 bg-slate-100'
-                                }`}>
-                                    {row.priority}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                                <span className={`text-xs font-medium px-2 py-1 rounded-md ${
-                                row.status === 'Won' || row.status === 'Done' ? 'bg-emerald-50 text-emerald-700' :
-                                row.status === 'Lost' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-700'
-                                }`}>
-                                {row.status}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 text-right font-mono font-bold">
-                                {row.category === 'Presale' 
-                                ? `${(row.value/1000000).toFixed(1)}M`
-                                : `${row.hours}h`}
-                            </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                    {filteredData.length === 0 && (
-                        <div className="p-8 text-center text-slate-400">
-                            No active tasks found. (Check "Show Completed Tasks" to see done items)
+
+                    {/* KPI Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">{Icons.Dollar}</div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">Active Pipeline</p>
+                                <h3 className="text-xl font-bold">{(totalPresaleValue / 1000000).toFixed(2)}M</h3>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">{Icons.Trending}</div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">Win Rate</p>
+                                <h3 className="text-xl font-bold">{winRate}%</h3>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">{Icons.Clock}</div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">Active Man-Hours</p>
+                                <h3 className="text-xl font-bold">{totalBAUHours} Hrs</h3>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">{Icons.Target}</div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">OKR Progress</p>
+                                <h3 className="text-xl font-bold">{okrCompletion}%</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h4 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
+                                <span className="text-blue-500">{Icons.Briefcase}</span>
+                                Weekly Performance
+                            </h4>
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={weeklyPerformance}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                                        <YAxis axisLine={false} tickLine={false} />
+                                        <Tooltip />
+                                        <Legend iconType="circle" />
+                                        <Bar dataKey="presale" name="Presale (M THB)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                        <Bar dataKey="bau" name="BAU Hours" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h4 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
+                                <span className="text-emerald-500">{Icons.Dashboard}</span>
+                                Task Status
+                            </h4>
+                            <div className="h-[300px] flex items-center justify-center">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
+                                            {statusData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip />
+                                        <Legend />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div className="p-6 border-b border-slate-100">
+                            <h4 className="font-bold text-slate-700">Activity Log</h4>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                                        <th className="px-6 py-4 font-semibold">Week</th>
+                                        <th className="px-6 py-4 font-semibold">Category</th>
+                                        <th className="px-6 py-4 font-semibold">Task/Project</th>
+                                        <th className="px-6 py-4 font-semibold">Customer</th>
+                                        <th className="px-6 py-4 font-semibold">PM</th>
+                                        <th className="px-6 py-4 font-semibold">Priority</th>
+                                        <th className="px-6 py-4 font-semibold text-center">Status</th>
+                                        <th className="px-6 py-4 font-semibold text-right">Val/Hrs</th>
+                                        <th className="px-6 py-4 font-semibold bg-blue-50 text-blue-700 border-l border-blue-100">Next Week</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-sm divide-y divide-slate-100">
+                                    {filteredData.map((row) => (
+                                        <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 font-medium text-slate-400">{row.week}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                                    row.category === 'Presale' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                    {row.category}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-700">{row.task}</div>
+                                                <div className="text-xs text-slate-400">{row.date}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-600">{row.customer}</td>
+                                            <td className="px-6 py-4 text-slate-600 flex items-center gap-1">
+                                                <span className="text-indigo-400" style={{width: 14}}>{Icons.User}</span> {row.projectManager}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-sm ${
+                                                    row.priority === 'High' ? 'text-rose-600 bg-rose-50' : 
+                                                    row.priority === 'Medium' ? 'text-amber-600 bg-amber-50' : 'text-slate-500 bg-slate-100'
+                                                }`}>
+                                                    {row.priority}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className={`text-xs font-medium px-2 py-1 rounded-md ${
+                                                    ['Won', 'Done'].includes(row.status) ? 'bg-emerald-50 text-emerald-700' :
+                                                    row.status === 'Lost' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-700'
+                                                }`}>
+                                                    {row.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-mono font-bold">
+                                                {row.category === 'Presale' 
+                                                    ? `${(Number(row.value || 0)/1000000).toFixed(1)}M`
+                                                    : `${row.hours || 0}h`}
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-600 border-l border-slate-50 bg-slate-50/50">
+                                                {row.nextWeek ? (
+                                                    <span className="flex items-center gap-1 text-xs">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                                                        {row.nextWeek}
+                                                    </span>
+                                                ) : <span className="text-slate-300">-</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Add Activity Modal */}
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 modal-overlay">
+                            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden modal-content max-h-[90vh] overflow-y-auto">
+                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                    <h3 className="font-bold text-lg text-slate-800">Add New Activity</h3>
+                                    <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+                                        {Icons.X}
+                                    </button>
+                                </div>
+                                <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                                            <input type="date" required 
+                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                value={newActivity.date}
+                                                onChange={e => setNewActivity({...newActivity, date: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                                            <select 
+                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                value={newActivity.category}
+                                                onChange={e => setNewActivity({...newActivity, category: e.target.value})}
+                                            >
+                                                <option value="Presale">Presale</option>
+                                                <option value="BAU">BAU</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Task / Project Name</label>
+                                        <input type="text" required placeholder="e.g. Project Alpha"
+                                            className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                            value={newActivity.task}
+                                            onChange={e => setNewActivity({...newActivity, task: e.target.value})}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Customer</label>
+                                            <input type="text" required placeholder="e.g. ABC Corp"
+                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                value={newActivity.customer}
+                                                onChange={e => setNewActivity({...newActivity, customer: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Project Manager</label>
+                                            <input type="text" required placeholder="e.g. Somsak"
+                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                value={newActivity.projectManager}
+                                                onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                                            <select 
+                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                value={newActivity.status}
+                                                onChange={e => setNewActivity({...newActivity, status: e.target.value})}
+                                            >
+                                                {newActivity.category === 'Presale' ? (
+                                                    <>
+                                                        <option value="Lead">Lead</option>
+                                                        <option value="Proposal">Proposal</option>
+                                                        <option value="Bit">Bit</option>
+                                                        <option value="Won">Won</option>
+                                                        <option value="Lost">Lost</option>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <option value="In Progress">In Progress</option>
+                                                        <option value="Done">Done</option>
+                                                        <option value="Pending">Pending</option>
+                                                    </>
+                                                )}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+                                            <select 
+                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                value={newActivity.priority}
+                                                onChange={e => setNewActivity({...newActivity, priority: e.target.value})}
+                                            >
+                                                <option value="High">High</option>
+                                                <option value="Medium">Medium</option>
+                                                <option value="Low">Low</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">OKR</label>
+                                            <select 
+                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                value={newActivity.okr}
+                                                onChange={e => setNewActivity({...newActivity, okr: e.target.value})}
+                                            >
+                                                <option value="Yes">Yes</option>
+                                                <option value="No">No</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            {newActivity.category === 'Presale' ? 'Value (THB)' : 'Man Hours'}
+                                        </label>
+                                        <input type="number" required min="0"
+                                            className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                            value={newActivity.value}
+                                            onChange={e => setNewActivity({...newActivity, value: e.target.value})}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-blue-700 mb-1 flex items-center gap-1">
+                                            {Icons.Trending} Plan for Next Week
+                                        </label>
+                                        <textarea 
+                                            className="w-full rounded-lg border-blue-200 border bg-blue-50 p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                            rows="2"
+                                            placeholder="What is the next step?"
+                                            value={newActivity.nextWeek}
+                                            onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})}
+                                        ></textarea>
+                                    </div>
+
+                                    <div className="pt-4 flex justify-end gap-3">
+                                        <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+                                        <button type="submit" className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg shadow-sm">Save Activity</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     )}
-                    </div>
-                </div>
                 </div>
             );
         };
