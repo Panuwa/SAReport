@@ -250,32 +250,61 @@
                 nextWeek: '' 
             });
 
-            // *** Auth Listener ***
+            // *** Auth Listener with Fixed Logic ***
             useEffect(() => {
-                const { auth, onAuthStateChanged } = window.dbService || {};
-                if (auth) {
-                    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-                        if (firebaseUser) {
-                            // Determine Role from Email
-                            // แก้ไข: เพิ่ม .trim() ตัดช่องว่าง และใช้ .includes() เพื่อให้ตรวจสอบง่ายขึ้น
-                            const email = firebaseUser.email ? firebaseUser.email.toLowerCase().trim() : '';
-                            const isAdmin = email.includes('admin') || email.includes('panuwatk');
-                            const role = isAdmin ? 'admin' : 'viewer';
-                            
-                            setUser({ 
-                                email: firebaseUser.email, 
-                                role: role,
-                                uid: firebaseUser.uid
-                            });
+                const initAuth = () => {
+                    const { auth, onAuthStateChanged } = window.dbService || {};
+                    if (auth) {
+                        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+                            if (firebaseUser) {
+                                // Determine Role from Email
+                                const email = firebaseUser.email ? firebaseUser.email.toLowerCase().trim() : '';
+                                
+                                // Explicitly check for panuwatk (covering panuwatk@gmail.com)
+                                let isAdmin = false;
+                                if (email.includes('admin')) isAdmin = true;
+                                if (email.includes('panuwatk')) isAdmin = true;
+                                
+                                const role = isAdmin ? 'admin' : 'viewer';
+                                
+                                setUser({ 
+                                    email: firebaseUser.email, 
+                                    role: role,
+                                    uid: firebaseUser.uid
+                                });
+                            } else {
+                                setUser(null);
+                            }
+                            setAuthChecking(false);
+                        });
+                        return unsubscribe;
+                    }
+                    return null;
+                };
+
+                // Retry logic to handle script loading race condition
+                let unsubscribe = initAuth();
+                let retryInterval;
+
+                if (!unsubscribe) {
+                    retryInterval = setInterval(() => {
+                        unsubscribe = initAuth();
+                        if (unsubscribe) {
+                            clearInterval(retryInterval);
+                        } else if (!window.dbService) {
+                           // Keep retrying
                         } else {
-                            setUser(null);
+                           // dbService exists but no auth? stop
+                           setAuthChecking(false);
+                           clearInterval(retryInterval);
                         }
-                        setAuthChecking(false);
-                    });
-                    return () => unsubscribe();
-                } else {
-                    setAuthChecking(false);
+                    }, 500);
                 }
+
+                return () => {
+                    if (unsubscribe) unsubscribe();
+                    if (retryInterval) clearInterval(retryInterval);
+                };
             }, []);
 
             // *** Realtime Data Listener (Only if User is Logged In) ***
@@ -476,7 +505,9 @@
                                 <span className="text-slate-500 text-sm flex items-center gap-1">
                                     {Icons.UserCheck} 
                                     Logged in as: <strong>{user.email}</strong> 
-                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded uppercase font-bold">{user.role}</span>
+                                    <span className={`px-2 py-0.5 text-xs rounded uppercase font-bold ${user.role === 'admin' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                                        {user.role}
+                                    </span>
                                 </span>
                                 <span className="text-slate-300">|</span>
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${isFirebase ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
