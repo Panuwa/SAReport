@@ -380,7 +380,7 @@
                     startDate: item.startDate || item.date, // Fallback if no startDate
                     category: item.category,
                     task: item.task,
-                    note: item.note || '',
+                    note: item.note || '', // Ensure note is fetched
                     customer: item.customer,
                     owner: item.owner,
                     projectManager: item.projectManager,
@@ -415,14 +415,27 @@
                 const week = getWeekNumber(newActivity.date);
                 const quarter = getQuarter(newActivity.date);
                 
+                // Explicitly construct payload to ensure 'note' is included
                 const payload = {
-                    ...newActivity,
+                    date: newActivity.date,
+                    startDate: newActivity.startDate,
+                    category: newActivity.category,
+                    task: newActivity.task,
+                    note: newActivity.note || '', // Explicitly include note
+                    customer: newActivity.customer,
+                    owner: newActivity.owner,
+                    projectManager: newActivity.projectManager,
+                    priority: newActivity.priority,
+                    status: newActivity.status,
+                    okr: newActivity.okr,
+                    nextWeek: newActivity.nextWeek || '',
+                    
+                    // Computed Fields
                     week,
                     quarter,
-                    value: Number(newActivity.value),
                     hours: newActivity.category === 'BAU' ? Number(newActivity.value) : 0,
                     value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
-                    updatedBy: user.email, // Track who updated
+                    updatedBy: user.email,
                     updatedAt: new Date().toISOString()
                 };
 
