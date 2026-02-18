@@ -8,21 +8,21 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React & ReactDOM (CDNJS is more reliable) -->
+    <!-- React & ReactDOM (Cloudflare CDN - Highly Reliable) -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     
-    <!-- Prop Types (Required for Recharts UMD) -->
+    <!-- Prop Types (Required dependency for Recharts) -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
     
-    <!-- Recharts (Stable Version for Browser) -->
-    <script crossorigin src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
+    <!-- Recharts (Cloudflare CDN - Stable Version 2.12.3) -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.3/Recharts.min.js"></script>
     
-    <!-- Lucide React (Specific Version compatible with UMD) -->
-    <script crossorigin src="https://unpkg.com/lucide-react@0.294.0/dist/umd/lucide-react.min.js"></script>
+    <!-- Lucide React (Specific stable UMD version) -->
+    <script crossorigin src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
 
-    <!-- Babel for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Babel for JSX transformation -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -30,21 +30,53 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root">
-        <div class="p-10 text-center text-slate-500">
-            Loading Dashboard...
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="text-center space-y-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p class="text-slate-500 font-medium">Loading Dashboard...</p>
+                <p class="text-xs text-slate-400">Connecting to libraries...</p>
+            </div>
         </div>
     </div>
 
     <script type="text/babel">
-        // Safety check to ensure libraries are loaded
-        if (!window.React || !window.ReactDOM || !window.Recharts || !window.lucideReact) {
+        // --- Library Stability Check ---
+        // ตรวจสอบว่า Library สำคัญโหลดครบหรือไม่
+        const requiredLibs = {
+            'React': window.React,
+            'ReactDOM': window.ReactDOM,
+            'Recharts': window.Recharts,
+            'lucideReact': window.lucideReact
+        };
+
+        const missingLibs = Object.keys(requiredLibs).filter(key => !requiredLibs[key]);
+
+        if (missingLibs.length > 0) {
+            console.error('Missing Libraries:', missingLibs);
             document.getElementById('root').innerHTML = `
-                <div class="p-10 text-center text-red-500 font-bold">
-                    Error: One or more libraries failed to load.<br>
-                    Please check your internet connection or try refreshing the page.
+                <div class="flex items-center justify-center min-h-screen bg-red-50 p-4">
+                    <div class="bg-white p-6 rounded-lg shadow-lg border border-red-200 max-w-md w-full text-center">
+                        <div class="text-red-500 mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-xl font-bold text-red-700 mb-2">Failed to load libraries</h2>
+                        <p class="text-slate-600 mb-4">
+                            The following components could not be loaded:<br>
+                            <code class="bg-red-100 px-2 py-1 rounded text-red-800 font-mono text-sm mt-2 inline-block">${missingLibs.join(', ')}</code>
+                        </p>
+                        <p class="text-sm text-slate-500">
+                            Please check your internet connection or try refreshing the page.
+                            <br>Ensure you are not blocking CDNs (cdnjs/unpkg).
+                        </p>
+                        <button onclick="window.location.reload()" class="mt-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors w-full">
+                            Reload Page
+                        </button>
+                    </div>
                 </div>
             `;
-            throw new Error("Library missing");
+            throw new Error(`Critical: Missing libraries [${missingLibs.join(', ')}]`);
         }
 
         const { useState, useMemo } = React;
