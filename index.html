@@ -108,17 +108,18 @@
             Lock: <Icon path={<><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>} />,
             LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />,
             Edit: <Icon path={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>} />,
-            Trash: <Icon path={<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>} />
+            Trash: <Icon path={<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>} />,
+            Calendar: <Icon path={<><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>} />
         };
 
         const { useState, useEffect, useMemo } = React;
         const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
-        // --- Mock Data ---
+        // --- Mock Data (Updated Structure) ---
         const MOCK_DATA = [
-            { id: 1, week: 'W07', date: '2026-02-10', quarter: 'Q1', category: 'Presale', task: 'Project Alpha', customer: 'ABC Corp', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'High', value: 2000000, hours: 0, okr: 'Yes', nextWeek: 'Kickoff meeting' },
-            { id: 2, week: 'W07', date: '2026-02-12', quarter: 'Q1', category: 'BAU', task: 'System Update', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 8, okr: 'Yes', nextWeek: 'Monitor logs' },
-            { id: 3, week: 'W07', date: '2026-02-13', quarter: 'Q1', category: 'Presale', task: 'Project Gamma', customer: 'XYZ Ltd', owner: 'Panuwat', projectManager: 'Somsak', status: 'Proposal', priority: 'High', value: 500000, hours: 0, okr: 'No', nextWeek: 'Submit pricing' },
+            { id: 1, week: 'W07', date: '2026-02-10', startDate: '2026-01-15', quarter: 'Q1', category: 'Presale', task: 'Project Alpha', note: 'Requirement gathering with customer', customer: 'ABC Corp', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'High', value: 2000000, hours: 0, okr: 'Yes', nextWeek: 'Kickoff meeting' },
+            { id: 2, week: 'W07', date: '2026-02-12', startDate: '2026-02-01', quarter: 'Q1', category: 'BAU', task: 'System Update', note: 'Patch server security updates', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 8, okr: 'Yes', nextWeek: 'Monitor logs' },
+            { id: 3, week: 'W07', date: '2026-02-13', startDate: '2026-02-10', quarter: 'Q1', category: 'Presale', task: 'Project Gamma', note: 'Drafting initial proposal', customer: 'XYZ Ltd', owner: 'Panuwat', projectManager: 'Somsak', status: 'Proposal', priority: 'High', value: 500000, hours: 0, okr: 'No', nextWeek: 'Submit pricing' },
         ];
 
         const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -236,10 +237,13 @@
             const [showModal, setShowModal] = useState(false);
             const [editingId, setEditingId] = useState(null);
 
+            // Updated State with new fields
             const [newActivity, setNewActivity] = useState({
                 date: new Date().toISOString().split('T')[0],
+                startDate: new Date().toISOString().split('T')[0], // New: Project Start Date
                 category: 'Presale',
                 task: '',
+                note: '', // New: Activity Details for the week
                 customer: '',
                 owner: 'Panuwat',
                 projectManager: '',
@@ -352,8 +356,10 @@
                 setEditingId(null);
                 setNewActivity({
                     date: new Date().toISOString().split('T')[0],
+                    startDate: new Date().toISOString().split('T')[0],
                     category: 'Presale',
                     task: '',
+                    note: '',
                     customer: '',
                     owner: 'Panuwat',
                     projectManager: '',
@@ -371,8 +377,10 @@
                 setEditingId(item.id);
                 setNewActivity({
                     date: item.date,
+                    startDate: item.startDate || item.date, // Fallback if no startDate
                     category: item.category,
                     task: item.task,
+                    note: item.note || '',
                     customer: item.customer,
                     owner: item.owner,
                     projectManager: item.projectManager,
@@ -654,12 +662,12 @@
                                         <th className="px-6 py-4 font-semibold">Week</th>
                                         <th className="px-6 py-4 font-semibold">Category</th>
                                         <th className="px-6 py-4 font-semibold">Task/Project</th>
+                                        <th className="px-6 py-4 font-semibold bg-blue-50/50">Activity / Note</th>
                                         <th className="px-6 py-4 font-semibold">Customer</th>
                                         <th className="px-6 py-4 font-semibold">PM</th>
                                         <th className="px-6 py-4 font-semibold">Priority</th>
                                         <th className="px-6 py-4 font-semibold text-center">Status</th>
-                                        <th className="px-6 py-4 font-semibold text-right">Value (THB)</th>
-                                        <th className="px-6 py-4 font-semibold text-right">Man Hours</th>
+                                        <th className="px-6 py-4 font-semibold text-right">Val/Hrs</th>
                                         <th className="px-6 py-4 font-semibold bg-blue-50 text-blue-700 border-l border-blue-100">Next Week</th>
                                         {user.role === 'admin' && <th className="px-6 py-4 font-semibold text-center w-28">Actions</th>}
                                     </tr>
@@ -677,7 +685,14 @@
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-700">{row.task}</div>
-                                                <div className="text-xs text-slate-400">{row.date}</div>
+                                                <div className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                                                    {Icons.Calendar} Start: {row.startDate || row.date}
+                                                </div>
+                                            </td>
+                                            {/* New Activity / Note Column */}
+                                            <td className="px-6 py-4 bg-blue-50/20">
+                                                <div className="text-xs text-slate-500 mb-1">{row.date}</div>
+                                                <div className="text-sm text-slate-700">{row.note || '-'}</div>
                                             </td>
                                             <td className="px-6 py-4 text-slate-600">{row.customer}</td>
                                             <td className="px-6 py-4 text-slate-600 flex items-center gap-1">
@@ -700,10 +715,7 @@
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">
-                                                {row.category === 'Presale' ? (Number(row.value || 0)/1000000).toFixed(1) + 'M' : '-'}
-                                            </td>
-                                            <td className="px-6 py-4 text-right font-mono font-bold text-slate-600">
-                                                {row.category === 'BAU' ? (row.hours || 0) + 'h' : '-'}
+                                                {row.category === 'Presale' ? (Number(row.value || 0)/1000000).toFixed(1) + 'M' : (row.hours || 0) + 'h'}
                                             </td>
                                             <td className="px-6 py-4 text-slate-600 border-l border-slate-50 bg-slate-50/50">
                                                 {row.nextWeek ? (
@@ -753,54 +765,86 @@
                                     </button>
                                 </div>
                                 <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
-                                            <input type="date" required 
-                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                                value={newActivity.date}
-                                                onChange={e => setNewActivity({...newActivity, date: e.target.value})}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                                            <select 
-                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
-                                                value={newActivity.category}
-                                                onChange={e => setNewActivity({...newActivity, category: e.target.value})}
-                                            >
-                                                <option value="Presale">Presale</option>
-                                                <option value="BAU">BAU</option>
-                                            </select>
+                                    
+                                    {/* Group: Activity Date Info */}
+                                    <div className="bg-slate-50 p-4 rounded-xl space-y-4 border border-slate-100">
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase">Activity Timeframe</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Log Date (Activity Date)</label>
+                                                <input type="date" required 
+                                                    className="w-full rounded-lg border-slate-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                    value={newActivity.date}
+                                                    onChange={e => setNewActivity({...newActivity, date: e.target.value})}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Project Start Date</label>
+                                                <input type="date" 
+                                                    className="w-full rounded-lg border-slate-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    value={newActivity.startDate}
+                                                    onChange={e => setNewActivity({...newActivity, startDate: e.target.value})}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
+                                    {/* Group: Project Info */}
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                                                <select 
+                                                    className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                    value={newActivity.category}
+                                                    onChange={e => setNewActivity({...newActivity, category: e.target.value})}
+                                                >
+                                                    <option value="Presale">Presale</option>
+                                                    <option value="BAU">BAU</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Task / Project Name</label>
+                                                <input type="text" required placeholder="e.g. Project Alpha"
+                                                    className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                    value={newActivity.task}
+                                                    onChange={e => setNewActivity({...newActivity, task: e.target.value})}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Customer</label>
+                                                <input type="text" required placeholder="e.g. ABC Corp"
+                                                    className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                    value={newActivity.customer}
+                                                    onChange={e => setNewActivity({...newActivity, customer: e.target.value})}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Project Manager</label>
+                                                <input type="text" required placeholder="e.g. Somsak"
+                                                    className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
+                                                    value={newActivity.projectManager}
+                                                    onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Group: Details */}
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Task / Project Name</label>
-                                        <input type="text" required placeholder="e.g. Project Alpha"
-                                            className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
-                                            value={newActivity.task}
-                                            onChange={e => setNewActivity({...newActivity, task: e.target.value})}
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Customer</label>
-                                            <input type="text" required placeholder="e.g. ABC Corp"
-                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
-                                                value={newActivity.customer}
-                                                onChange={e => setNewActivity({...newActivity, customer: e.target.value})}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Project Manager</label>
-                                            <input type="text" required placeholder="e.g. Somsak"
-                                                className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none"
-                                                value={newActivity.projectManager}
-                                                onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})}
-                                            />
-                                        </div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">
+                                            Activity Note (What you did this week)
+                                        </label>
+                                        <textarea 
+                                            className="w-full rounded-lg border-slate-300 border p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                            rows="2"
+                                            placeholder="Details of the activity..."
+                                            value={newActivity.note}
+                                            onChange={e => setNewActivity({...newActivity, note: e.target.value})}
+                                        ></textarea>
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-4">
