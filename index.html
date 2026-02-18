@@ -24,7 +24,7 @@
     <!-- Firebase SDKs (Modular) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, addDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // --- ส่วนที่ 1: วาง Firebase Config ตรงนี้ ---
         const firebaseConfig = {
@@ -53,7 +53,9 @@
         window.dbService = {
             db: db,
             getDocs: getDocs,
-            addDoc: addDoc, // เพิ่ม function addDoc ให้ React เรียกใช้ได้
+            addDoc: addDoc,
+            updateDoc: updateDoc, // เพิ่ม updateDoc สำหรับแก้ไข
+            doc: doc,             // เพิ่ม doc สำหรับอ้างอิงเอกสาร
             collection: collection
         };
     </script>
@@ -100,7 +102,8 @@
             Plus: <Icon path={<><path d="M5 12h14" /><path d="M12 5v14" /></>} />,
             X: <Icon path={<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>} />,
             Lock: <Icon path={<><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>} />,
-            LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />
+            LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />,
+            Edit: <Icon path={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>} />
         };
 
         const { useState, useEffect, useMemo } = React;
@@ -134,8 +137,28 @@
              return 'Q' + Math.ceil(month / 3);
         };
 
-        // --- Login Component ---
+        // --- Login Component with Password ---
         const LoginScreen = ({ onLogin }) => {
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleRoleLogin = (role) => {
+                setError('');
+                if (role === 'admin') {
+                    if (password === 'admin123') {
+                        onLogin('admin');
+                    } else {
+                        setError('Incorrect Admin Password');
+                    }
+                } else if (role === 'viewer') {
+                    if (password === 'viewer123') {
+                        onLogin('viewer');
+                    } else {
+                        setError('Incorrect Viewer Password');
+                    }
+                }
+            };
+
             return (
                 <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
                     <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
@@ -145,25 +168,38 @@
                             </div>
                         </div>
                         <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome Back</h2>
-                        <p className="text-slate-500 mb-8">Please select your role to continue</p>
+                        <p className="text-slate-500 mb-6">Please enter password and select role</p>
                         
+                        <div className="mb-6 text-left">
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                            <input 
+                                type="password" 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Enter password..."
+                                className="w-full rounded-lg border-slate-300 border p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            {error && <p className="text-rose-500 text-sm mt-1">{error}</p>}
+                        </div>
+
                         <div className="space-y-4">
                             <button 
-                                onClick={() => onLogin('admin')}
+                                onClick={() => handleRoleLogin('admin')}
                                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                             >
                                 {Icons.UserCheck} Login as Admin
                             </button>
                             <button 
-                                onClick={() => onLogin('viewer')}
+                                onClick={() => handleRoleLogin('viewer')}
                                 className="w-full py-3 px-4 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
                             >
                                 {Icons.Eye} Login as Viewer
                             </button>
                         </div>
-                        <p className="mt-6 text-xs text-slate-400">
-                            *Admin can edit data. Viewer is read-only.
-                        </p>
+                        <div className="mt-6 text-xs text-slate-400 bg-slate-50 p-2 rounded border border-slate-200">
+                            <strong>Default Passwords:</strong><br/>
+                            Admin: <code>admin123</code> | Viewer: <code>viewer123</code>
+                        </div>
                     </div>
                 </div>
             );
@@ -179,8 +215,11 @@
             const [selectedWeek, setSelectedWeek] = useState('All');
             const [showDone, setShowDone] = useState(false);
             const [showModal, setShowModal] = useState(false);
+            
+            // Edit State
+            const [editingId, setEditingId] = useState(null);
 
-            // New Activity Form State with Next Week Detail
+            // Form State
             const [newActivity, setNewActivity] = useState({
                 date: new Date().toISOString().split('T')[0],
                 category: 'Presale',
@@ -192,7 +231,7 @@
                 status: 'Proposal',
                 value: 0,
                 okr: 'Yes',
-                nextWeek: '' // New Field
+                nextWeek: '' 
             });
 
             // Fetch Data
@@ -220,14 +259,51 @@
                     setLoading(false);
                 };
                 
-                // Only fetch if user is logged in (simulated delay moved to after login for smoother UX, but kept here for data readiness)
                 if (user) {
-                     // In real app, might fetch here. For now, we simulate fetch on mount but show after login.
+                     // In real app, might fetch here.
                 }
                 setTimeout(fetchData, 500);
             }, []);
 
-            // Handle Add Activity
+            // Open Modal for Add
+            const openAddModal = () => {
+                setEditingId(null);
+                setNewActivity({
+                    date: new Date().toISOString().split('T')[0],
+                    category: 'Presale',
+                    task: '',
+                    customer: '',
+                    owner: 'Panuwat',
+                    projectManager: '',
+                    priority: 'Medium',
+                    status: 'Proposal',
+                    value: 0,
+                    okr: 'Yes',
+                    nextWeek: ''
+                });
+                setShowModal(true);
+            };
+
+            // Open Modal for Edit
+            const handleEdit = (item) => {
+                setEditingId(item.id);
+                setNewActivity({
+                    date: item.date,
+                    category: item.category,
+                    task: item.task,
+                    customer: item.customer,
+                    owner: item.owner,
+                    projectManager: item.projectManager,
+                    priority: item.priority,
+                    status: item.status,
+                    value: item.category === 'Presale' ? item.value : item.hours,
+                    okr: item.okr || 'Yes',
+                    nextWeek: item.nextWeek || ''
+                });
+                setShowModal(true);
+            };
+
+            // Handle Submit (Add or Edit)
             const handleAddSubmit = async (e) => {
                 e.preventDefault();
                 const week = getWeekNumber(newActivity.date);
@@ -242,24 +318,38 @@
                     value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
                 };
 
-                const { db, addDoc, collection } = window.dbService || {};
+                const { db, addDoc, updateDoc, doc, collection } = window.dbService || {};
 
                 if (db && isFirebase) {
                     try {
-                        const docRef = await addDoc(collection(db, "tasks"), payload);
-                        setData([...data, { id: docRef.id, ...payload }]);
-                        alert("Added to Firebase successfully!");
+                        if (editingId) {
+                            // Edit Mode
+                            const docRef = doc(db, "tasks", editingId);
+                            await updateDoc(docRef, payload);
+                            // Update local state
+                            setData(data.map(item => item.id === editingId ? { ...item, ...payload } : item));
+                            alert("Updated successfully!");
+                        } else {
+                            // Add Mode
+                            const docRef = await addDoc(collection(db, "tasks"), payload);
+                            setData([...data, { id: docRef.id, ...payload }]);
+                            alert("Added successfully!");
+                        }
                     } catch (e) {
-                        console.error("Error adding document: ", e);
-                        alert("Error adding to Firebase.");
+                        console.error("Error saving document: ", e);
+                        alert("Error saving to Firebase.");
                     }
                 } else {
                     // Local Mock Update
-                    setData([...data, { id: Date.now(), ...payload }]);
-                    alert("Added to local view (Mock Data).");
+                    if (editingId) {
+                        setData(data.map(item => item.id === editingId ? { ...item, ...payload } : item));
+                        alert("Updated local data.");
+                    } else {
+                        setData([...data, { id: Date.now(), ...payload }]);
+                        alert("Added to local data.");
+                    }
                 }
                 setShowModal(false);
-                setNewActivity({...newActivity, task: '', customer: '', value: 0, nextWeek: ''});
             };
 
             // Calculation Logic
@@ -337,7 +427,7 @@
                         <div className="flex flex-wrap gap-3 items-center">
                             {user.role === 'admin' && (
                                 <button 
-                                    onClick={() => setShowModal(true)}
+                                    onClick={openAddModal}
                                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-colors"
                                 >
                                     {Icons.Plus}
@@ -365,7 +455,7 @@
                         </div>
                     </div>
 
-                    {/* Filter Bar (Moved here for better layout on mobile) */}
+                    {/* Filter Bar */}
                     <div className="flex justify-end mb-6">
                         <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm text-sm">
                             <span className="text-slate-400">{Icons.Filter}</span>
@@ -473,6 +563,7 @@
                                         <th className="px-6 py-4 font-semibold text-center">Status</th>
                                         <th className="px-6 py-4 font-semibold text-right">Val/Hrs</th>
                                         <th className="px-6 py-4 font-semibold bg-blue-50 text-blue-700 border-l border-blue-100">Next Week</th>
+                                        {user.role === 'admin' && <th className="px-6 py-4 font-semibold text-center w-20">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="text-sm divide-y divide-slate-100">
@@ -523,6 +614,16 @@
                                                     </span>
                                                 ) : <span className="text-slate-300">-</span>}
                                             </td>
+                                            {user.role === 'admin' && (
+                                                <td className="px-6 py-4 text-center">
+                                                    <button 
+                                                        onClick={() => handleEdit(row)}
+                                                        className="text-slate-400 hover:text-blue-600 transition-colors p-2 rounded-full hover:bg-blue-50"
+                                                    >
+                                                        {Icons.Edit}
+                                                    </button>
+                                                </td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>
@@ -530,12 +631,14 @@
                         </div>
                     </div>
 
-                    {/* Add Activity Modal */}
+                    {/* Add/Edit Activity Modal */}
                     {showModal && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden modal-content max-h-[90vh] overflow-y-auto">
                                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                                    <h3 className="font-bold text-lg text-slate-800">Add New Activity</h3>
+                                    <h3 className="font-bold text-lg text-slate-800">
+                                        {editingId ? 'Edit Activity' : 'Add New Activity'}
+                                    </h3>
                                     <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
                                         {Icons.X}
                                     </button>
@@ -667,7 +770,9 @@
 
                                     <div className="pt-4 flex justify-end gap-3">
                                         <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-                                        <button type="submit" className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg shadow-sm">Save Activity</button>
+                                        <button type="submit" className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg shadow-sm">
+                                            {editingId ? 'Update Activity' : 'Save Activity'}
+                                        </button>
                                     </div>
                                 </form>
                             </div>
