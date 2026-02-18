@@ -61,12 +61,12 @@
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-100 text-slate-900">
     <div id="root">
-        <div class="flex items-center justify-center min-h-screen">
+        <div class="flex items-center justify-center min-h-screen bg-slate-50">
             <div class="text-center">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">Initializing SA Dashboard...</p>
+                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">กำลังเตรียมหน้าจอ Dashboard...</p>
             </div>
         </div>
     </div>
@@ -118,12 +118,12 @@
             };
             return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 text-left">
-                    <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md space-y-4">
-                        <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">SA Dashboard</h2>
-                        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
-                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
-                        {error && <p className="text-rose-500 text-xs font-bold text-center bg-rose-50 p-2 rounded">{error}</p>}
-                        <button type="submit" className="w-full py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-widest">Login</button>
+                    <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md space-y-4">
+                        <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">Dashboard Login</h2>
+                        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" />
+                        {error && <p className="text-rose-500 text-xs font-bold text-center bg-rose-50 p-3 rounded-xl border border-rose-100">{error}</p>}
+                        <button type="submit" className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-widest">เข้าสู่ระบบ</button>
                     </form>
                 </div>
             );
@@ -166,18 +166,24 @@
                 const { db, collection, onSnapshot, query, orderBy } = window.dbService;
                 const q = query(collection(db, "tasks"), orderBy("date", "desc"));
                 const unsubscribe = onSnapshot(q, (snapshot) => {
-                    const docs = snapshot.docs.map(doc => ({ 
-                        id: doc.id, 
-                        ...doc.data(),
-                        note: doc.data().note || doc.data().activityNote || "" 
-                    }));
+                    const docs = snapshot.docs.map(doc => {
+                        const d = doc.data();
+                        return { 
+                            id: doc.id, 
+                            ...d,
+                            note: d.note || d.activityNote || d.activity || "" 
+                        };
+                    });
                     setData(docs);
                 });
                 return () => unsubscribe();
             }, [user]);
 
-            // Filters & KPIs
-            const uniqueWeeks = useMemo(() => [...new Set(data.map(d => d.week))].filter(Boolean).sort(), [data]);
+            // Filters & Unique Weeks
+            const uniqueWeeks = useMemo(() => {
+                const weeks = [...new Set(data.map(d => d.week))].filter(Boolean).sort();
+                return weeks;
+            }, [data]);
             
             const filteredData = useMemo(() => {
                 return data.filter(item => {
@@ -187,6 +193,7 @@
                 });
             }, [data, selectedWeek, showDone]);
 
+            // KPIs
             const kpis = useMemo(() => {
                 const presale = filteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0);
                 const bau = filteredData.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0);
@@ -196,6 +203,7 @@
                 return { presale, bau, winRate, okrRate };
             }, [filteredData]);
 
+            // Chart Data
             const chartData = useMemo(() => {
                 const weeks = [...new Set(data.map(d => d.week))].sort().slice(-6);
                 return weeks.map(w => {
@@ -208,7 +216,7 @@
                 });
             }, [data]);
 
-            // CRUD Handlers
+            // Modal Handlers
             const handleEdit = (item) => {
                 setEditingId(item.id);
                 setNewActivity({
@@ -242,13 +250,7 @@
                     if (editingId) { await updateDoc(doc(db, "tasks", editingId), payload); }
                     else { await addDoc(collection(db, "tasks"), payload); }
                     setShowModal(false);
-                } catch (err) { alert(err.message); }
-            };
-
-            const handleDelete = async (id) => {
-                if (!confirm("Delete this?")) return;
-                const { db, deleteDoc, doc } = window.dbService;
-                try { await deleteDoc(doc(db, "tasks", id)); } catch (err) { alert(err.message); }
+                } catch (err) { alert("Error: " + err.message); }
             };
 
             if (loading) return null;
@@ -256,28 +258,32 @@
 
             return (
                 <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-                    {/* Top Header */}
-                    <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    {/* Header with Week Filter */}
+                    <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                         <div>
-                            <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">SA Dashboard</h1>
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">{user.email} | <span className="text-blue-600">{user.role}</span></p>
+                            <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">SA Performance Dashboard</h1>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{user.email}</span>
+                                <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">{user.role}</span>
+                            </div>
                         </div>
                         <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-                            {/* WEEK FILTER */}
-                            <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-2xl text-xs font-black border border-slate-200">
-                                {Icons.Filter}
-                                <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-transparent outline-none uppercase">
+                            {/* WEEK FILTER UI */}
+                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-xs font-black group">
+                                <span className="text-slate-400 group-hover:text-blue-600 transition-colors">{Icons.Filter}</span>
+                                <span className="text-slate-500 uppercase">WEEK:</span>
+                                <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-transparent outline-none uppercase font-black text-blue-600">
                                     <option value="All">All Weeks</option>
                                     {uniqueWeeks.map(w => <option key={w} value={w}>{w}</option>)}
                                 </select>
                             </div>
                             
                             {user.role === 'admin' && (
-                                <button onClick={() => { setEditingId(null); setShowModal(true); }} className="bg-blue-600 text-white px-5 py-2 rounded-2xl text-xs font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex-grow lg:flex-grow-0">
-                                    {Icons.Plus} Add New
+                                <button onClick={() => { setEditingId(null); setShowModal(true); }} className="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-xs font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center gap-2">
+                                    {Icons.Plus} Add Activity
                                 </button>
                             )}
-                            <button onClick={() => window.dbService.signOut(window.dbService.auth)} className="bg-white border text-slate-400 px-4 py-2 rounded-2xl text-xs font-black hover:bg-slate-50 uppercase">
+                            <button onClick={() => window.dbService.signOut(window.dbService.auth)} className="bg-white border border-slate-200 text-slate-500 px-4 py-2.5 rounded-2xl text-xs font-black hover:bg-slate-50 uppercase flex items-center gap-2">
                                 {Icons.LogOut}
                             </button>
                         </div>
@@ -285,124 +291,126 @@
 
                     {/* KPI CARDS */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4 group hover:border-blue-200 transition-all">
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
                             <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all">{Icons.Dollar}</div>
                             <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Pipeline</p><h3 className="text-xl font-black">{kpis.presale.toFixed(1)}M</h3></div>
                         </div>
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4 group hover:border-emerald-200 transition-all">
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
                             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">{Icons.Target}</div>
                             <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Win Rate</p><h3 className="text-xl font-black">{kpis.winRate}%</h3></div>
                         </div>
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4 group hover:border-amber-200 transition-all">
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
                             <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:bg-amber-600 group-hover:text-white transition-all">{Icons.Clock}</div>
                             <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">BAU Hours</p><h3 className="text-xl font-black">{kpis.bau}h</h3></div>
                         </div>
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4 group hover:border-purple-200 transition-all">
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
                             <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl group-hover:bg-purple-600 group-hover:text-white transition-all">{Icons.Target}</div>
                             <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">OKR Progress</p><h3 className="text-xl font-black">{kpis.okrRate}%</h3></div>
                         </div>
                     </div>
 
                     {/* CHARTS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 chart-container">
-                            <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Weekly Trend
-                            </h4>
-                            <div className="h-[250px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={chartData}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} style={{fontSize: '10px', fontWeight: '900'}} />
-                                        <YAxis axisLine={false} tickLine={false} style={{fontSize: '10px'}} />
-                                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                                        <Legend iconType="circle" />
-                                        <Bar dataKey="presale" name="Presale (M)" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                                        <Bar dataKey="bau" name="BAU (Hrs)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                    {ResponsiveContainer && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                                <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Weekly Performance Trend
+                                </h4>
+                                <div className="h-[250px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={chartData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis dataKey="name" axisLine={false} tickLine={false} style={{fontSize: '10px', fontWeight: '900'}} />
+                                            <YAxis axisLine={false} tickLine={false} style={{fontSize: '10px'}} />
+                                            <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                                            <Legend iconType="circle" />
+                                            <Bar dataKey="presale" name="Presale (M)" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                                            <Bar dataKey="bau" name="BAU (Hrs)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                                 <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest text-center">Status Distribution</h4>
+                                 <div className="h-[250px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie data={Object.entries(filteredData.reduce((acc, c) => ({...acc, [c.status]: (acc[c.status] || 0) + 1}), {})).map(([name, value]) => ({name, value}))} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                                {COLORS.map((color, index) => <Cell key={`cell-${index}`} fill={color} stroke="none" />)}
+                                            </Pie>
+                                            <Tooltip contentStyle={{borderRadius: '16px', border: 'none'}} />
+                                            <Legend verticalAlign="bottom" align="center" iconType="circle" />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                 </div>
                             </div>
                         </div>
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 chart-container">
-                             <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest text-center">Status Overview</h4>
-                             <div className="h-[250px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                            {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />)}
-                                        </Pie>
-                                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none'}} />
-                                        <Legend verticalAlign="bottom" align="center" iconType="circle" />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                             </div>
-                        </div>
-                    </div>
+                    )}
 
-                    {/* ACTIVITY TABLE */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                        <div className="p-6 bg-slate-50/50 border-b flex justify-between items-center">
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activity Detail Log</h4>
+                    {/* ACTIVITY LOG TABLE */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
+                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Activity Detail Log</h4>
                             <button onClick={() => setShowDone(!showDone)} className="text-[10px] font-black text-blue-600 uppercase hover:underline">
-                                {showDone ? "Hide Done" : "Show All"}
+                                {showDone ? "Hide Done Tasks" : "Show All Tasks"}
                             </button>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-50 text-slate-400 text-[9px] uppercase font-black tracking-widest">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
                                     <tr>
-                                        <th className="px-6 py-4">Week / Project</th>
-                                        <th className="px-6 py-4 bg-blue-50/30">Activity Note (สัปดาห์นี้)</th>
-                                        <th className="px-6 py-4">PM / Owner</th>
-                                        <th className="px-6 py-4 text-center">Status</th>
-                                        <th className="px-6 py-4 text-right">Value (M)</th>
-                                        <th className="px-6 py-4 text-right">Hours (h)</th>
-                                        <th className="px-6 py-4 text-center">Action</th>
+                                        <th className="px-6 py-5">Week / Task Name</th>
+                                        <th className="px-6 py-5 bg-blue-50/50">Activity Note (สัปดาห์นี้ทำอะไร)</th>
+                                        <th className="px-6 py-5">Project Manager</th>
+                                        <th className="px-6 py-5 text-center">Status</th>
+                                        <th className="px-6 py-5 text-right">Value (M)</th>
+                                        <th className="px-6 py-5 text-right">Hours (h)</th>
+                                        <th className="px-6 py-5 text-center">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-sm divide-y divide-slate-100">
+                                <tbody className="text-sm divide-y divide-slate-100 bg-white">
                                     {filteredData.map(row => (
                                         <tr key={row.id} className="hover:bg-slate-50 group transition-all">
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-5">
                                                 <div className="text-blue-500 font-black text-[10px] uppercase mb-1">{row.week}</div>
                                                 <div className="font-black text-slate-800 text-base leading-tight">{row.task}</div>
-                                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-bold">
-                                                    {Icons.Calendar} START: {row.startDate || row.date}
+                                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-2 font-bold bg-slate-100 w-fit px-2 py-0.5 rounded">
+                                                    {Icons.Calendar} Start: {row.startDate || row.date}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 bg-blue-50/10 min-w-[300px]">
-                                                <div className="text-[9px] text-blue-400 font-black mb-1 flex items-center gap-1 uppercase">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Log: {row.date}
+                                            <td className="px-6 py-5 bg-blue-50/20 min-w-[320px] max-w-md">
+                                                <div className="text-[9px] text-blue-400 font-black mb-2 flex items-center gap-1 uppercase">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Log Date: {row.date}
                                                 </div>
-                                                <div className="text-slate-800 font-bold whitespace-pre-wrap italic text-xs leading-relaxed">
-                                                    {row.note || <span className="text-slate-300 font-normal">ไม่มีบันทึก</span>}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-1 text-slate-700 font-bold text-xs mb-1">
-                                                    <span className="text-blue-400">{Icons.User}</span> PM: {row.projectManager || '-'}
-                                                </div>
-                                                <div className="text-[10px] text-slate-400 uppercase font-black flex items-center gap-1">
-                                                    Owner: {row.owner || 'Panuwat'}
+                                                <div className="text-slate-800 font-bold whitespace-pre-wrap italic text-xs leading-relaxed border-l-2 border-blue-200 pl-3">
+                                                    {row.note ? row.note : <span className="text-slate-300 font-normal">ไม่มีบันทึกรายละเอียดงาน</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter shadow-sm ${['Won', 'Done'].includes(row.status) ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-2 text-slate-700 font-bold text-xs">
+                                                    <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-[10px] font-black uppercase">
+                                                        {(row.projectManager || 'N').charAt(0)}
+                                                    </div>
+                                                    {row.projectManager || '-'}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 text-center">
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter shadow-sm ${['Won', 'Done'].includes(row.status) ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
                                                     {row.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-right font-mono font-black text-blue-600 text-lg">
+                                            <td className="px-6 py-5 text-right font-mono font-black text-blue-600 text-lg">
                                                 {row.category === 'Presale' ? `${Number(row.value || 0).toFixed(1)}M` : '-'}
                                             </td>
-                                            <td className="px-6 py-4 text-right font-mono font-black text-amber-600 text-lg">
+                                            <td className="px-6 py-5 text-right font-mono font-black text-amber-600 text-lg">
                                                 {row.category === 'BAU' ? `${row.hours || 0}h` : '-'}
                                             </td>
-                                            <td className="px-6 py-4 text-center">
+                                            <td className="px-6 py-5 text-center">
                                                 <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                     {user.role === 'admin' && (
                                                         <>
-                                                            <button onClick={() => handleEdit(row)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full">{Icons.Edit}</button>
-                                                            <button onClick={() => handleDelete(row.id)} className="p-2 text-rose-600 hover:bg-rose-100 rounded-full">{Icons.Trash}</button>
+                                                            <button onClick={() => handleEdit(row)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors">{Icons.Edit}</button>
+                                                            <button onClick={() => { if(confirm("Confirm delete?")) window.dbService.deleteDoc(window.dbService.doc(window.dbService.db, "tasks", row.id)); }} className="p-2 text-rose-600 hover:bg-rose-100 rounded-full transition-colors">{Icons.Trash}</button>
                                                         </>
                                                     )}
                                                 </div>
@@ -411,65 +419,65 @@
                                     ))}
                                 </tbody>
                             </table>
-                            {filteredData.length === 0 && <div className="p-20 text-center font-black text-slate-300 uppercase tracking-widest">No data available</div>}
                         </div>
                     </div>
 
-                    {/* MODAL FORM */}
+                    {/* FORM MODAL */}
                     {showModal && (
                         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 modal-overlay overflow-y-auto">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg modal-content border border-slate-100 text-left">
-                                <div className="p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-3xl">
-                                    <h3 className="font-black text-lg text-slate-800 uppercase tracking-tight">{editingId ? 'Edit Task' : 'Record Activity'}</h3>
+                            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg modal-content border border-slate-100 text-left">
+                                <div className="p-8 border-b flex justify-between items-center bg-slate-50 rounded-t-[2rem]">
+                                    <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">{editingId ? 'แก้ไขข้อมูล' : 'บันทึกกิจกรรมใหม่'}</h3>
                                     <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all">{Icons.X}</button>
                                 </div>
-                                <form onSubmit={handleAddSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                                <form onSubmit={handleAddSubmit} className="p-8 space-y-5 max-h-[75vh] overflow-y-auto">
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">Log Date</label>
-                                            <input type="date" required className="w-full border p-3 rounded-2xl text-sm" value={newActivity.date} onChange={e => setNewActivity({...newActivity, date: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่บันทึก (LOG)</label>
+                                            <input type="date" required className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.date} onChange={e => setNewActivity({...newActivity, date: e.target.value})} />
                                         </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">Start Date</label>
-                                            <input type="date" className="w-full border p-3 rounded-2xl text-sm" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่เริ่มโครงการ</label>
+                                            <input type="date" className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">Category</label>
-                                            <select className="w-full border p-3 rounded-2xl text-sm outline-none" value={newActivity.category} onChange={e => setNewActivity({...newActivity, category: e.target.value})}><option value="Presale">Presale</option><option value="BAU">BAU</option></select>
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ประเภทงาน</label>
+                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none" value={newActivity.category} onChange={e => setNewActivity({...newActivity, category: e.target.value})}><option value="Presale">Presale</option><option value="BAU">BAU</option></select>
                                         </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">Task Name</label>
-                                            <input type="text" required placeholder="Project Name..." className="w-full border p-3 rounded-2xl text-sm" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ชื่อโครงการ / Task</label>
+                                            <input type="text" required placeholder="ชื่อโครงการ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div><label className="text-[10px] font-black text-blue-600 uppercase mb-1 block underline ml-1">Activity Note (สัปดาห์นี้ทำอะไรไปบ้าง)</label>
-                                        <textarea required rows="4" className="w-full border p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/20 font-bold" value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="Describe activity details..."></textarea>
+                                    <div><label className="text-[10px] font-black text-blue-600 uppercase mb-2 block ml-1 underline tracking-wider">รายละเอียดสิ่งที่ทำในสัปดาห์นี้</label>
+                                        <textarea required rows="4" className="w-full border border-blue-100 p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30 font-bold placeholder-blue-300" 
+                                            value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="ระบุสิ่งที่ทำลงไปในสัปดาห์นี้..."></textarea>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">Customer</label>
-                                            <input type="text" placeholder="Customer Name" className="w-full border p-3 rounded-2xl text-sm" value={newActivity.customer} onChange={e => setNewActivity({...newActivity, customer: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ลูกค้า (Customer)</label>
+                                            <input type="text" placeholder="ชื่อบริษัทลูกค้า..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.customer} onChange={e => setNewActivity({...newActivity, customer: e.target.value})} />
                                         </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">PM (Project Manager)</label>
-                                            <input type="text" placeholder="PM Name" className="w-full border p-3 rounded-2xl text-sm" value={newActivity.projectManager} onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Project Manager</label>
+                                            <input type="text" placeholder="ชื่อผู้รับผิดชอบ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.projectManager} onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">Status</label>
-                                            <select className="w-full border p-3 rounded-2xl text-sm" value={newActivity.status} onChange={e => setNewActivity({...newActivity, status: e.target.value})}>
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">สถานะ</label>
+                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.status} onChange={e => setNewActivity({...newActivity, status: e.target.value})}>
                                                 {newActivity.category === 'Presale' ? <><option value="Lead">Lead</option><option value="Proposal">Proposal</option><option value="Bit">Bit</option><option value="Won">Won</option><option value="Lost">Lost</option></> : <><option value="In Progress">In Progress</option><option value="Done">Done</option><option value="Pending">Pending</option></>}
                                             </select>
                                         </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">OKR</label>
-                                            <select className="w-full border p-3 rounded-2xl text-sm" value={newActivity.okr} onChange={e => setNewActivity({...newActivity, okr: e.target.value})}><option value="Yes">Yes</option><option value="No">No</option></select>
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">OKR</label>
+                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.okr} onChange={e => setNewActivity({...newActivity, okr: e.target.value})}><option value="Yes">Yes</option><option value="No">No</option></select>
                                         </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">{newActivity.category === 'Presale' ? 'Val (M)' : 'Hours'}</label>
-                                            <input type="number" step="any" className="w-full border p-3 rounded-2xl text-sm" value={newActivity.value} onChange={e => setNewActivity({...newActivity, value: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">{newActivity.category === 'Presale' ? 'Val (M)' : 'Hours'}</label>
+                                            <input type="number" step="any" className="w-full border border-slate-200 p-3 rounded-2xl text-sm font-black text-blue-600" value={newActivity.value} onChange={e => setNewActivity({...newActivity, value: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-1 block ml-1">Next Week Plan</label>
-                                        <input type="text" placeholder="What's next?" className="w-full border p-3 rounded-2xl text-sm bg-slate-50" value={newActivity.nextWeek} onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})} />
+                                    <div><label className="text-[10px] font-black text-indigo-600 uppercase mb-2 block ml-1">แผนงานสัปดาห์หน้า (Next Step)</label>
+                                        <input type="text" placeholder="แผนงานขั้นต่อไป..." className="w-full border border-indigo-100 p-3 rounded-2xl text-sm bg-indigo-50/50" value={newActivity.nextWeek} onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})} />
                                     </div>
-                                    <div className="flex justify-end gap-3 pt-4 border-t">
-                                        <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2 text-xs font-black text-slate-400 uppercase tracking-widest">Cancel</button>
-                                        <button type="submit" className="px-12 py-3 bg-blue-600 text-white rounded-2xl text-xs font-black shadow-xl shadow-blue-100 uppercase tracking-widest hover:scale-105 transition-transform">Save</button>
+                                    <div className="flex justify-end gap-4 pt-6 border-t border-slate-100">
+                                        <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">ยกเลิก</button>
+                                        <button type="submit" className="px-12 py-4 bg-blue-600 text-white rounded-[1.25rem] text-xs font-black shadow-xl shadow-blue-100 uppercase tracking-widest hover:scale-105 transition-all">บันทึกข้อมูล</button>
                                     </div>
                                 </form>
                             </div>
@@ -479,18 +487,24 @@
             );
         };
 
-        // --- Bootstrap App ---
-        function startApp() {
+        // --- Reliability Bootstrapper ---
+        function runDashboard() {
             const check = () => {
-                const ready = window.dbService && window.dbService.status === 'ready' && !!window.Recharts && !!window.ReactDOM;
-                if (ready) {
-                    const r = ReactDOM.createRoot(document.getElementById('root'));
-                    r.render(<App />);
-                } else { setTimeout(check, 200); }
+                const isReady = window.dbService && window.dbService.status === 'ready' && !!window.ReactDOM && !!window.Recharts;
+                if (isReady) {
+                    const rootEl = document.getElementById('root');
+                    if (rootEl) {
+                        const root = ReactDOM.createRoot(rootEl);
+                        root.render(<App />);
+                        console.log("Dashboard Started Successfully");
+                    }
+                } else {
+                    setTimeout(check, 100);
+                }
             };
             check();
         }
-        window.addEventListener('load', startApp);
+        window.addEventListener('load', runDashboard);
     </script>
 </body>
 </html>
