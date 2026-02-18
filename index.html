@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Presale & BAU Performance Dashboard (Realtime)</title>
+    <title>Presale & BAU Performance Dashboard (Secure)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -24,7 +24,8 @@
     <!-- Firebase SDKs (Modular) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        // เพิ่ม import onSnapshot, query, orderBy
+        // เพิ่ม firebase-auth
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // --- Config ของคุณ ---
@@ -40,10 +41,13 @@
         // ------------------
 
         let db = null;
+        let auth = null;
+
         try {
             if (firebaseConfig.apiKey) {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
+                auth = getAuth(app); // Initialize Auth
                 console.log("Firebase initialized successfully");
             } else {
                 console.warn("Using Mock Data (No Config)");
@@ -52,18 +56,11 @@
             console.error("Firebase init error:", e);
         }
 
-        // Expose DB functions including onSnapshot
+        // Expose DB & Auth functions to global window
         window.dbService = {
-            db: db,
-            getDocs: getDocs,
-            addDoc: addDoc,
-            updateDoc: updateDoc,
-            deleteDoc: deleteDoc,
-            doc: doc,
-            collection: collection,
-            onSnapshot: onSnapshot, // เพิ่ม onSnapshot
-            query: query,           // เพิ่ม query
-            orderBy: orderBy        // เพิ่ม orderBy
+            db, auth,
+            getDocs, addDoc, updateDoc, deleteDoc, doc, collection, onSnapshot, query, orderBy,
+            signInWithEmailAndPassword, signOut, onAuthStateChanged
         };
     </script>
 
@@ -81,7 +78,7 @@
         <div class="flex items-center justify-center min-h-screen">
             <div class="text-center space-y-4">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p class="text-slate-500 font-medium">Connecting to Firebase Realtime...</p>
+                <p class="text-slate-500 font-medium">Connecting to System...</p>
             </div>
         </div>
     </div>
@@ -140,26 +137,32 @@
              return 'Q' + Math.ceil(month / 3);
         };
 
-        // --- Login Component ---
-        const LoginScreen = ({ onLogin }) => {
+        // --- Login Component (Real Firebase Auth) ---
+        const LoginScreen = () => {
+            const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
 
-            const handleRoleLogin = (role) => {
+            const handleLogin = async (e) => {
+                e.preventDefault();
                 setError('');
-                if (role === 'admin') {
-                    if (password === 'admin123') {
-                        onLogin('admin');
-                    } else {
-                        setError('Incorrect Admin Password');
+                setLoading(true);
+                
+                const { auth, signInWithEmailAndPassword } = window.dbService || {};
+                
+                if (auth) {
+                    try {
+                        await signInWithEmailAndPassword(auth, email, password);
+                        // Auth listener in App will handle the rest
+                    } catch (err) {
+                        console.error(err);
+                        setError("Login failed. Please check your email and password.");
                     }
-                } else if (role === 'viewer') {
-                    if (password === 'viewer123') {
-                        onLogin('viewer');
-                    } else {
-                        setError('Incorrect Viewer Password');
-                    }
+                } else {
+                    setError("Firebase Auth not initialized.");
                 }
+                setLoading(false);
             };
 
             return (
@@ -170,38 +173,49 @@
                                 {Icons.Lock}
                             </div>
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome Back</h2>
-                        <p className="text-slate-500 mb-6">Please enter password and select role</p>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Secure Login</h2>
+                        <p className="text-slate-500 mb-6">Please sign in to access the dashboard</p>
                         
-                        <div className="mb-6 text-left">
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                            <input 
-                                type="password" 
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Enter password..."
-                                className="w-full rounded-lg border-slate-300 border p-3 outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            {error && <p className="text-rose-500 text-sm mt-1">{error}</p>}
-                        </div>
+                        <form onSubmit={handleLogin} className="mb-6 text-left space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                                <input 
+                                    type="email" 
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="e.g. admin@sareport.com"
+                                    required
+                                    className="w-full rounded-lg border-slate-300 border p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                                <input 
+                                    type="password" 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter password..."
+                                    required
+                                    className="w-full rounded-lg border-slate-300 border p-3 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            
+                            {error && <p className="text-rose-500 text-sm">{error}</p>}
 
-                        <div className="space-y-4">
                             <button 
-                                onClick={() => handleRoleLogin('admin')}
-                                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                                type="submit"
+                                disabled={loading}
+                                className={`w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
-                                {Icons.UserCheck} Login as Admin
+                                {loading ? 'Signing in...' : 'Sign In'}
                             </button>
-                            <button 
-                                onClick={() => handleRoleLogin('viewer')}
-                                className="w-full py-3 px-4 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
-                            >
-                                {Icons.Eye} Login as Viewer
-                            </button>
-                        </div>
+                        </form>
+
                         <div className="mt-6 text-xs text-slate-400 bg-slate-50 p-2 rounded border border-slate-200">
-                            <strong>Default Passwords:</strong><br/>
-                            Admin: <code>admin123</code> | Viewer: <code>viewer123</code>
+                            <strong>Setup Info:</strong><br/>
+                            1. Enable "Email/Password" in Firebase Console > Authentication.<br/>
+                            2. Create users (e.g., admin@sareport.com).<br/>
+                            3. Use "admin" in email for Admin rights.
                         </div>
                     </div>
                 </div>
@@ -209,9 +223,10 @@
         };
 
         const App = () => {
-            const [user, setUser] = useState(null);
+            const [user, setUser] = useState(null); // { email, role }
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [authChecking, setAuthChecking] = useState(true);
             const [isFirebase, setIsFirebase] = useState(false);
             const [firebaseError, setFirebaseError] = useState(null);
             
@@ -235,57 +250,69 @@
                 nextWeek: '' 
             });
 
-            // *** Realtime Data Listener ***
+            // *** Auth Listener ***
             useEffect(() => {
-                let unsubscribe;
+                const { auth, onAuthStateChanged } = window.dbService || {};
+                if (auth) {
+                    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+                        if (firebaseUser) {
+                            // Determine Role from Email (Simple Logic)
+                            const role = firebaseUser.email.toLowerCase().includes('admin') ? 'admin' : 'viewer';
+                            setUser({ 
+                                email: firebaseUser.email, 
+                                role: role,
+                                uid: firebaseUser.uid
+                            });
+                        } else {
+                            setUser(null);
+                        }
+                        setAuthChecking(false);
+                    });
+                    return () => unsubscribe();
+                } else {
+                    setAuthChecking(false);
+                }
+            }, []);
 
+            // *** Realtime Data Listener (Only if User is Logged In) ***
+            useEffect(() => {
+                if (!user) return; // Don't fetch if not logged in
+
+                let unsubscribe;
                 const connectToFirebase = () => {
-                    const { db, collection, onSnapshot, query, orderBy } = window.dbService || {};
+                    const { db, collection, onSnapshot, query } = window.dbService || {};
                     
                     if (db) {
                         try {
-                            // ใช้ onSnapshot เพื่อฟังข้อมูลแบบ Realtime
-                            const q = query(collection(db, "tasks")); // สามารถใส่ orderBy("date", "desc") ได้ถ้าต้องการ
-                            
+                            const q = query(collection(db, "tasks"));
                             unsubscribe = onSnapshot(q, (snapshot) => {
                                 const firebaseData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                                // เรียงข้อมูลตามวันที่ (ใหม่สุดขึ้นก่อน)
                                 firebaseData.sort((a, b) => new Date(b.date) - new Date(a.date));
-                                
                                 setData(firebaseData);
                                 setIsFirebase(true);
                                 setLoading(false);
                                 setFirebaseError(null);
                             }, (error) => {
-                                console.error("Firebase Snapshot Error:", error);
-                                // ถ้า Error (เช่น Permission Denied) ให้ใช้ Mock Data
-                                setFirebaseError("Permission Denied: Please check Firestore Rules.");
+                                console.error("Firebase Error:", error);
+                                setFirebaseError("Access Denied: Check Rules.");
                                 setIsFirebase(false); 
-                                setData(MOCK_DATA); 
+                                setData(MOCK_DATA); // Fallback to see UI structure
                                 setLoading(false);
                             });
                         } catch (e) {
                             console.error("Setup Error:", e);
-                            setData(MOCK_DATA);
                             setLoading(false);
-                        }
-                    } else {
-                        // Retry ถ้า script ยังโหลดไม่เสร็จ
-                        if(typeof window.dbService === 'undefined') {
-                             setTimeout(connectToFirebase, 500);
-                        } else {
-                             setData(MOCK_DATA);
-                             setLoading(false);
                         }
                     }
                 };
-
                 connectToFirebase();
+                return () => { if (unsubscribe) unsubscribe(); };
+            }, [user]);
 
-                return () => {
-                    if (unsubscribe) unsubscribe();
-                };
-            }, []);
+            const handleLogout = async () => {
+                const { auth, signOut } = window.dbService || {};
+                if (auth) await signOut(auth);
+            };
 
             // Open Modal for Add
             const openAddModal = () => {
@@ -328,20 +355,14 @@
              // Handle Delete
             const handleDelete = async (item) => {
                 if(!window.confirm(`Are you sure you want to delete "${item.task}"?`)) return;
-
                 const { db, deleteDoc, doc } = window.dbService || {};
-
                 if (db && isFirebase) {
                     try {
-                        // ลบจาก Firebase (Listener จะอัปเดตหน้าจอเอง)
                         await deleteDoc(doc(db, "tasks", item.id));
-                        // alert("Deleted successfully!"); // ไม่ต้อง alert ก็ได้เพราะ UI จะหายไปเอง
                     } catch (e) {
-                        console.error("Error deleting document: ", e);
-                        alert("Error deleting from Firebase.");
+                        alert("Error deleting: " + e.message);
                     }
                 } else {
-                    // Local Mock Delete
                     setData(data.filter(d => d.id !== item.id));
                     alert("Deleted from local data.");
                 }
@@ -360,6 +381,8 @@
                     value: Number(newActivity.value),
                     hours: newActivity.category === 'BAU' ? Number(newActivity.value) : 0,
                     value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
+                    updatedBy: user.email, // Track who updated
+                    updatedAt: new Date().toISOString()
                 };
 
                 const { db, addDoc, updateDoc, doc, collection } = window.dbService || {};
@@ -367,29 +390,22 @@
                 if (db && isFirebase) {
                     try {
                         if (editingId) {
-                            // Edit Mode -> Update Firebase
                             const docRef = doc(db, "tasks", editingId);
                             await updateDoc(docRef, payload);
-                            // ไม่ต้อง setData เอง Listener จะทำหน้าที่นี้
                         } else {
-                            // Add Mode -> Add to Firebase
                             await addDoc(collection(db, "tasks"), payload);
-                            // ไม่ต้อง setData เอง Listener จะทำหน้าที่นี้
                         }
-                        // alert("Saved successfully!");
                     } catch (e) {
-                        console.error("Error saving document: ", e);
-                        alert("Error saving to Firebase: " + e.message);
+                        alert("Error saving: " + e.message);
                     }
                 } else {
                     // Local Mock Update
                     if (editingId) {
                         setData(data.map(item => item.id === editingId ? { ...item, ...payload } : item));
-                        alert("Updated local data.");
                     } else {
                         setData([...data, { id: Date.now(), ...payload }]);
-                        alert("Added to local data.");
                     }
+                    alert("Saved locally.");
                 }
                 setShowModal(false);
             };
@@ -438,11 +454,10 @@
             }, [filteredData]);
 
             // Authentication Handler
-            if (!user) {
-                return <LoginScreen onLogin={(role) => setUser({ role })} />;
-            }
+            if (authChecking) return <div className="text-center p-10 text-slate-500">Initializing...</div>;
+            if (!user) return <LoginScreen />;
 
-            if (loading) return <div className="text-center p-10 text-slate-500">Loading Data...</div>;
+            if (loading && !data.length) return <div className="text-center p-10 text-slate-500">Loading Data...</div>;
 
             return (
                 <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900 relative">
@@ -455,13 +470,13 @@
                             </h1>
                             <div className="flex gap-2 items-center mt-1">
                                 <span className="text-slate-500 text-sm flex items-center gap-1">
-                                    {user.role === 'admin' ? Icons.UserCheck : Icons.Eye} 
-                                    Logged in as: <strong className="capitalize">{user.role}</strong>
+                                    {Icons.UserCheck} 
+                                    Logged in as: <strong>{user.email}</strong> 
+                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded uppercase font-bold">{user.role}</span>
                                 </span>
                                 <span className="text-slate-300">|</span>
-                                <p className="text-slate-500 text-sm">Owner: Panuwat</p>
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${isFirebase ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                                    {isFirebase ? '● Live Data (Firebase)' : '○ Mock Data (Local)'}
+                                    {isFirebase ? '● Live Data' : '○ Mock Data'}
                                 </span>
                             </div>
                             {firebaseError && (
@@ -493,7 +508,7 @@
                             </button>
                             
                             <button 
-                                onClick={() => setUser(null)}
+                                onClick={handleLogout}
                                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
                             >
                                 {Icons.LogOut}
