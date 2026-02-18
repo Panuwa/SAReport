@@ -257,9 +257,9 @@
                     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
                         if (firebaseUser) {
                             // Determine Role from Email
-                            // Check for 'admin' string OR specific email 'panuwatk@gmail.com'
-                            const email = firebaseUser.email.toLowerCase();
-                            const isAdmin = email.includes('admin') || email === 'panuwatk@gmail.com';
+                            // แก้ไข: เพิ่ม .trim() ตัดช่องว่าง และใช้ .includes() เพื่อให้ตรวจสอบง่ายขึ้น
+                            const email = firebaseUser.email ? firebaseUser.email.toLowerCase().trim() : '';
+                            const isAdmin = email.includes('admin') || email.includes('panuwatk');
                             const role = isAdmin ? 'admin' : 'viewer';
                             
                             setUser({ 
