@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SA Performance Dashboard (Secure & Realtime)</title>
+    <title>SA Performance Dashboard (Secure & High Reliability)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -21,7 +21,7 @@
     <!-- Babel -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs (Modular) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -42,14 +42,14 @@
             const db = getFirestore(app);
             const auth = getAuth(app);
             
-            // Expose services to window
+            // Export to window object
             window.dbService = {
                 db, auth,
                 addDoc, updateDoc, deleteDoc, doc, collection, onSnapshot, query, orderBy,
                 signInWithEmailAndPassword, signOut, onAuthStateChanged,
-                isReady: true
+                status: 'ready'
             };
-            console.log("Firebase initialized");
+            console.log("Firebase Service: Ready");
         } catch (e) {
             console.error("Firebase init error:", e);
             window.dbServiceError = e.message;
@@ -57,30 +57,33 @@
     </script>
 
     <style>
-        body { font-family: 'Segoe UI', sans-serif; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow-x: hidden; }
         .modal-overlay { animation: fadeIn 0.2s ease-out; }
         .modal-content { animation: slideUp 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .chart-container { min-height: 300px; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root">
-        <div class="flex items-center justify-center min-h-screen">
-            <div class="text-center">
-                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p class="text-slate-500 font-medium">กําลังเริ่มการทำงานของ Dashboard...</p>
-                <p id="error-message" class="text-rose-500 text-xs mt-4 hidden"></p>
+        <div class="flex items-center justify-center min-h-screen bg-slate-50">
+            <div class="text-center bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-slate-600 font-bold">SA Dashboard</p>
+                <p class="text-slate-400 text-xs mt-2">กำลังตรวจสอบความพร้อมของระบบ...</p>
+                <p id="boot-error" class="text-rose-500 text-xs mt-4 hidden"></p>
             </div>
         </div>
     </div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts || {};
 
-        // --- Icons ---
-        const Icon = ({ path, color = "currentColor", size = 20 }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        // --- UI Icons ---
+        const Icon = ({ path, color = "currentColor", size = 20, className="" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {path}
             </svg>
         );
@@ -95,7 +98,8 @@
             Target: <Icon path={<><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>} />,
             LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />,
             Calendar: <Icon path={<><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>} />,
-            X: <Icon path={<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>} />
+            X: <Icon path={<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>} />,
+            Check: <Icon path={<><polyline points="20 6 9 17 4 12" /></>} />
         };
 
         const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -118,23 +122,21 @@
                 setError('');
                 setLoading(true);
                 try {
-                    await window.dbService.signInWithEmailAndPassword(window.dbService.auth, email, password);
+                    await window.dbService.signInWithEmailAndPassword(window.dbService.auth, email.trim(), password);
                 } catch (err) {
-                    setError("เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบอีเมลและรหัสผ่าน");
+                    setError("ล็อกอินไม่สำเร็จ กรุณาตรวจสอบอีเมลและรหัสผ่าน");
                 } finally { setLoading(false); }
             };
 
             return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
                     <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md space-y-4">
-                        <h2 className="text-2xl font-bold text-center text-slate-800">SA Performance Dashboard</h2>
-                        <div className="space-y-4">
-                            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                        </div>
-                        {error && <p className="text-rose-500 text-sm text-center font-medium">{error}</p>}
-                        <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
-                            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+                        <h2 className="text-2xl font-bold text-center text-slate-800 mb-6">SA Dashboard Login</h2>
+                        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                        {error && <p className="text-rose-500 text-sm text-center font-bold">{error}</p>}
+                        <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-wide">
+                            {loading ? "กำลังโหลด..." : "เข้าสู่ระบบ"}
                         </button>
                     </form>
                 </div>
@@ -145,58 +147,31 @@
             const [user, setUser] = useState(null);
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [authChecking, setAuthChecking] = useState(true);
             const [showModal, setShowModal] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [showDone, setShowDone] = useState(true);
 
-            // Access Recharts safely from window
-            const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts || {};
-
-            const [newActivity, setNewActivity] = useState({
-                date: new Date().toISOString().split('T')[0],
-                startDate: new Date().toISOString().split('T')[0],
-                category: 'Presale', task: '', note: '', customer: '', 
-                projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes'
-            });
-
+            // Auth Listener
             useEffect(() => {
-                let interval;
-                const checkAuth = () => {
-                    const svc = window.dbService;
-                    if (svc && svc.auth) {
-                        const unsubscribe = svc.onAuthStateChanged(svc.auth, (firebaseUser) => {
-                            if (firebaseUser) {
-                                const email = firebaseUser.email.toLowerCase();
-                                const isAdmin = email.includes('admin') || email === 'panuwatk@gmail.com';
-                                setUser({ email: firebaseUser.email, role: isAdmin ? 'admin' : 'viewer' });
-                            } else { setUser(null); }
-                            setAuthChecking(false);
-                        });
-                        if (interval) clearInterval(interval);
-                        return unsubscribe;
+                const svc = window.dbService;
+                if (!svc || !svc.auth) return;
+                const unsubscribe = svc.onAuthStateChanged(svc.auth, (fbUser) => {
+                    if (fbUser) {
+                        const email = fbUser.email.toLowerCase();
+                        const isAdmin = email.includes('admin') || email === 'panuwatk@gmail.com';
+                        setUser({ email: fbUser.email, role: isAdmin ? 'admin' : 'viewer', uid: fbUser.uid });
+                    } else {
+                        setUser(null);
                     }
-                    return null;
-                };
-
-                let unsubscribe = checkAuth();
-                if (!unsubscribe) {
-                    interval = setInterval(() => {
-                        unsubscribe = checkAuth();
-                        if (unsubscribe) clearInterval(interval);
-                    }, 500);
-                }
-
-                return () => {
-                    if (unsubscribe) unsubscribe();
-                    if (interval) clearInterval(interval);
-                };
+                    setLoading(false);
+                });
+                return () => unsubscribe();
             }, []);
 
+            // Real-time Firestore Listener
             useEffect(() => {
-                if (!user || !window.dbService || !window.dbService.db) return;
+                if (!user || !window.dbService.db) return;
                 const { db, collection, onSnapshot, query, orderBy } = window.dbService;
-
                 const q = query(collection(db, "tasks"), orderBy("date", "desc"));
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const docs = snapshot.docs.map(doc => ({ 
@@ -205,13 +180,11 @@
                         note: doc.data().note || doc.data().activityNote || "" 
                     }));
                     setData(docs);
-                    setLoading(false);
-                }, (err) => {
-                    console.error("Firestore error:", err);
                 });
                 return () => unsubscribe();
             }, [user]);
 
+            // Filtered Data & KPIs
             const filteredData = useMemo(() => {
                 return data.filter(item => showDone ? true : item.status !== 'Done');
             }, [data, showDone]);
@@ -221,8 +194,9 @@
                 const bau = filteredData.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0);
                 const winItems = filteredData.filter(d => d.category === 'Presale');
                 const winRate = winItems.length ? Math.round((winItems.filter(d => d.status === 'Won').length / winItems.length) * 100) : 0;
-                const okr = filteredData.length ? Math.round((filteredData.filter(d => d.okr === 'Yes').length / filteredData.length) * 100) : 0;
-                return { presale, bau, winRate, okr };
+                const okrItems = filteredData.filter(d => d.okr === 'Yes').length;
+                const okrRate = filteredData.length ? Math.round((okrItems / filteredData.length) * 100) : 0;
+                return { presale, bau, winRate, okrRate };
             }, [filteredData]);
 
             const chartData = useMemo(() => {
@@ -242,6 +216,14 @@
                 filteredData.forEach(d => { counts[d.status] = (counts[d.status] || 0) + 1; });
                 return Object.entries(counts).map(([name, value]) => ({ name, value }));
             }, [filteredData]);
+
+            // Form State
+            const [newActivity, setNewActivity] = useState({
+                date: new Date().toISOString().split('T')[0],
+                startDate: new Date().toISOString().split('T')[0],
+                category: 'Presale', task: '', note: '', customer: '', 
+                projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes'
+            });
 
             const handleEdit = (item) => {
                 setEditingId(item.id);
@@ -287,7 +269,7 @@
                     if (editingId) { await updateDoc(doc(db, "tasks", editingId), payload); }
                     else { await addDoc(collection(db, "tasks"), payload); }
                     setShowModal(false);
-                } catch (err) { alert("บันทึกไม่สำเร็จ: " + err.message); }
+                } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
             };
 
             const handleDelete = async (id) => {
@@ -296,84 +278,82 @@
                 try { await deleteDoc(doc(db, "tasks", id)); } catch (err) { alert(err.message); }
             };
 
-            if (authChecking) return (
-                <div className="flex items-center justify-center min-h-screen bg-slate-50">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                        <p className="text-slate-500">กำลังตรวจสอบสิทธิ์การเข้าใช้งาน...</p>
-                    </div>
-                </div>
-            );
-            
+            if (loading) return null; // Still mounting
             if (!user) return <LoginScreen />;
 
             return (
                 <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+                    {/* Header */}
                     <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-2xl font-bold text-slate-800">SA Performance Dashboard</h1>
-                            <p className="text-slate-500 text-sm">ผู้ใช้งาน: {user.email} <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase ml-2">{user.role}</span></p>
+                            <p className="text-slate-500 text-sm flex items-center gap-2">
+                                ผู้ใช้งาน: <strong>{user.email}</strong> 
+                                <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black ${user.role === 'admin' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                    {user.role}
+                                </span>
+                            </p>
                         </div>
                         <div className="flex gap-2">
                             {user.role === 'admin' && (
-                                <button onClick={() => { setEditingId(null); setShowModal(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-200">
+                                <button onClick={() => { setEditingId(null); setShowModal(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all">
                                     {Icons.Plus} เพิ่มกิจกรรม
                                 </button>
                             )}
-                            <button onClick={() => window.dbService.signOut(window.dbService.auth)} className="bg-white border text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                            <button onClick={() => window.dbService.signOut(window.dbService.auth)} className="bg-white border text-slate-600 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50">
                                 {Icons.LogOut} ออกจากระบบ
                             </button>
                         </div>
                     </header>
 
-                    {/* KPI Section */}
+                    {/* KPI Cards */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">{Icons.Dollar}</div>
-                            <div><p className="text-xs text-slate-500 font-bold uppercase">Pipeline</p><h3 className="text-lg font-bold">{kpis.presale.toFixed(1)}M</h3></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">{Icons.Dollar}</div>
+                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Pipeline</p><h3 className="text-xl font-black">{kpis.presale.toFixed(1)}M</h3></div>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">{Icons.Trending}</div>
-                            <div><p className="text-xs text-slate-500 font-bold uppercase">Win Rate</p><h3 className="text-lg font-bold">{kpis.winRate}%</h3></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">{Icons.Trending}</div>
+                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Win Rate</p><h3 className="text-xl font-black">{kpis.winRate}%</h3></div>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">{Icons.Clock}</div>
-                            <div><p className="text-xs text-slate-500 font-bold uppercase">BAU Hours</p><h3 className="text-lg font-bold">{kpis.bau}h</h3></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                            <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">{Icons.Clock}</div>
+                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">BAU Hours</p><h3 className="text-xl font-black">{kpis.bau}h</h3></div>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">{Icons.Target}</div>
-                            <div><p className="text-xs text-slate-500 font-bold uppercase">OKR Progress</p><h3 className="text-lg font-bold">{kpis.okr}%</h3></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">{Icons.Target}</div>
+                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">OKR Progress</p><h3 className="text-xl font-black">{kpis.okrRate}%</h3></div>
                         </div>
                     </div>
 
-                    {/* Charts */}
-                    {BarChart && (
+                    {/* Charts Row */}
+                    {ResponsiveContainer && (
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border min-h-[350px]">
-                                <h4 className="font-bold text-slate-700 mb-6 text-sm">Weekly Activity Trend (6 สัปดาห์ล่าสุด)</h4>
-                                <div className="h-[280px]">
+                            <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 chart-container">
+                                <h4 className="font-bold text-slate-700 mb-6 text-sm flex items-center gap-2">📈 กิจกรรมรายสัปดาห์ (6 สัปดาห์ล่าสุด)</h4>
+                                <div className="h-[250px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis dataKey="name" axisLine={false} tickLine={false} style={{fontSize: '12px'}} />
+                                            <XAxis dataKey="name" axisLine={false} tickLine={false} style={{fontSize: '12px', fontWeight: 'bold'}} />
                                             <YAxis axisLine={false} tickLine={false} style={{fontSize: '12px'}} />
-                                            <Tooltip />
-                                            <Legend />
+                                            <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                                            <Legend verticalAlign="top" align="right" height={36}/>
                                             <Bar dataKey="presale" name="Presale (M)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                                             <Bar dataKey="bau" name="BAU (Hours)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
                             </div>
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border min-h-[350px]">
-                                <h4 className="font-bold text-slate-700 mb-6 text-center text-sm">สัดส่วนสถานะงาน</h4>
-                                <div className="h-[280px]">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 chart-container">
+                                <h4 className="font-bold text-slate-700 mb-6 text-center text-sm flex items-center justify-center gap-2">📊 สถานะงานทั้งหมด</h4>
+                                <div className="h-[250px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                                 {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                             </Pie>
-                                            <Tooltip />
+                                            <Tooltip contentStyle={{borderRadius: '12px', border: 'none'}} />
                                             <Legend verticalAlign="bottom" height={36}/>
                                         </PieChart>
                                     </ResponsiveContainer>
@@ -383,49 +363,58 @@
                     )}
 
                     {/* Table Section */}
-                    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                         <div className="p-4 bg-slate-50/50 border-b flex justify-between items-center">
-                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">ประวัติกิจกรรม</h4>
-                            <button onClick={() => setShowDone(!showDone)} className="text-xs font-bold text-blue-600">
+                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ประวัติและกิจกรรมที่บันทึก</h4>
+                            <button onClick={() => setShowDone(!showDone)} className="text-xs font-bold text-blue-600 hover:underline">
                                 {showDone ? "ซ่อนงานที่เสร็จแล้ว" : "แสดงงานทั้งหมด"}
                             </button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-bold">
+                                <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black">
                                     <tr>
                                         <th className="px-6 py-4">Project / Week</th>
-                                        <th className="px-6 py-4 bg-blue-50/30">Activity Note (สัปดาห์นี้)</th>
+                                        <th className="px-6 py-4 bg-blue-50/20">Activity Note (ทำอะไรในสัปดาห์นี้)</th>
                                         <th className="px-6 py-4 text-center">Status</th>
                                         <th className="px-6 py-4 text-right">Val/Hrs</th>
-                                        <th className="px-6 py-4">Next Plan</th>
+                                        <th className="px-6 py-4">Next Step</th>
                                         {user.role === 'admin' && <th className="px-6 py-4 text-center">Action</th>}
                                     </tr>
                                 </thead>
-                                <tbody className="text-sm divide-y">
+                                <tbody className="text-sm divide-y divide-slate-100">
                                     {filteredData.map(row => (
                                         <tr key={row.id} className="hover:bg-slate-50 group transition-all">
                                             <td className="px-6 py-4">
-                                                <div className="text-blue-600 font-bold text-xs">{row.week}</div>
-                                                <div className="font-bold text-slate-800 text-base">{row.task}</div>
-                                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">{Icons.Calendar} Start: {row.startDate || row.date}</div>
+                                                <div className="text-blue-600 font-black text-[10px]">{row.week}</div>
+                                                <div className="font-black text-slate-800 text-base">{row.task}</div>
+                                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-bold">
+                                                    {Icons.Calendar} Start: {row.startDate || row.date}
+                                                </div>
                                             </td>
-                                            <td className="px-6 py-4 bg-blue-50/10 min-w-[280px]">
-                                                <div className="text-[10px] text-blue-400 font-black mb-1">LOGGED: {row.date}</div>
-                                                <div className="text-slate-800 leading-relaxed font-medium whitespace-pre-wrap">{row.note || <span className="text-slate-300 italic">(ไม่มีบันทึก)</span>}</div>
+                                            <td className="px-6 py-4 bg-blue-50/5 min-w-[300px]">
+                                                <div className="text-[10px] text-blue-400 font-black mb-1 flex items-center gap-1 uppercase">
+                                                    <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                                                    Log: {row.date}
+                                                </div>
+                                                <div className="text-slate-800 leading-relaxed font-bold whitespace-pre-wrap italic">
+                                                    {row.note ? row.note : <span className="text-slate-300">ไม่มีข้อมูลบันทึกกิจกรรม</span>}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-center">
-                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${['Won', 'Done'].includes(row.status) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${['Won', 'Done'].includes(row.status) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                                                     {row.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-right font-mono font-black text-slate-700">
+                                            <td className="px-6 py-4 text-right font-mono font-black text-slate-700 text-lg">
                                                 {row.category === 'Presale' ? `${Number(row.value || 0).toFixed(1)}M` : `${row.hours || 0}h`}
                                             </td>
-                                            <td className="px-6 py-4 text-xs text-slate-500 italic">{row.nextWeek || "-"}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs text-slate-500 font-bold max-w-[150px] line-clamp-2">{row.nextWeek || "-"}</div>
+                                            </td>
                                             {user.role === 'admin' && (
                                                 <td className="px-6 py-4 text-center">
-                                                    <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button onClick={() => handleEdit(row)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full">{Icons.Edit}</button>
                                                         <button onClick={() => handleDelete(row.id)} className="p-2 text-rose-600 hover:bg-rose-100 rounded-full">{Icons.Trash}</button>
                                                     </div>
@@ -438,61 +427,54 @@
                         </div>
                     </div>
 
-                    {/* Modal */}
+                    {/* Form Modal */}
                     {showModal && (
                         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 modal-overlay overflow-y-auto">
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg modal-content">
                                 <div className="p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl">
-                                    <h3 className="font-bold text-lg text-slate-800">{editingId ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรมใหม่'}</h3>
+                                    <h3 className="font-bold text-lg text-slate-800">{editingId ? 'แก้ไขกิจกรรม' : 'บันทึกกิจกรรมใหม่'}</h3>
                                     <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-200 rounded-full">{Icons.X}</button>
                                 </div>
                                 <form onSubmit={handleAddSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-left">
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">วันที่บันทึก</label>
-                                            <input type="date" required className="w-full border p-2 rounded-lg text-sm" value={newActivity.date} onChange={e => setNewActivity({...newActivity, date: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">วันที่บันทึก (LOG)</label>
+                                            <input type="date" required className="w-full border p-2 rounded-xl text-sm" value={newActivity.date} onChange={e => setNewActivity({...newActivity, date: e.target.value})} />
                                         </div>
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">วันที่เริ่มโครงการ</label>
-                                            <input type="date" className="w-full border p-2 rounded-lg text-sm" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">วันที่เริ่มโครงการ</label>
+                                            <input type="date" className="w-full border p-2 rounded-xl text-sm" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">หมวดหมู่</label>
-                                            <select className="w-full border p-2 rounded-lg text-sm" value={newActivity.category} onChange={e => setNewActivity({...newActivity, category: e.target.value})}><option value="Presale">Presale</option><option value="BAU">BAU</option></select>
+                                        <div><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">หมวดหมู่</label>
+                                            <select className="w-full border p-2 rounded-xl text-sm" value={newActivity.category} onChange={e => setNewActivity({...newActivity, category: e.target.value})}><option value="Presale">Presale</option><option value="BAU">BAU</option></select>
                                         </div>
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">ชื่อโครงการ/งาน</label>
-                                            <input type="text" required className="w-full border p-2 rounded-lg text-sm" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
+                                        <div><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">ชื่อโปรเจกต์/งาน</label>
+                                            <input type="text" required className="w-full border p-2 rounded-xl text-sm" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div><label className="text-xs font-bold text-blue-600 uppercase mb-1 block underline">รายละเอียดกิจกรรม (สัปดาห์นี้ทำอะไรไปบ้าง)</label>
-                                        <textarea required rows="4" className="w-full border p-2 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/20" value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="ระบุรายละเอียดสิ่งที่ทำ..."></textarea>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">ลูกค้า</label>
-                                            <input type="text" className="w-full border p-2 rounded-lg text-sm" value={newActivity.customer} onChange={e => setNewActivity({...newActivity, customer: e.target.value})} />
-                                        </div>
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">ผู้ดูแล (PM)</label>
-                                            <input type="text" className="w-full border p-2 rounded-lg text-sm" value={newActivity.projectManager} onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})} />
-                                        </div>
+                                    <div><label className="text-[10px] font-black text-blue-600 uppercase mb-1 block underline">รายละเอียดกิจกรรม (สัปดาห์นี้ทำอะไรไปบ้าง)</label>
+                                        <textarea required rows="4" className="w-full border p-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/20 placeholder-blue-300 font-bold" 
+                                            value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="Describe your activity..."></textarea>
                                     </div>
                                     <div className="grid grid-cols-3 gap-4">
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">สถานะ</label>
-                                            <select className="w-full border p-2 rounded-lg text-sm" value={newActivity.status} onChange={e => setNewActivity({...newActivity, status: e.target.value})}>
+                                        <div className="col-span-1"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">สถานะ</label>
+                                            <select className="w-full border p-2 rounded-xl text-sm" value={newActivity.status} onChange={e => setNewActivity({...newActivity, status: e.target.value})}>
                                                 {newActivity.category === 'Presale' ? <><option value="Lead">Lead</option><option value="Proposal">Proposal</option><option value="Bit">Bit</option><option value="Won">Won</option><option value="Lost">Lost</option></> : <><option value="In Progress">In Progress</option><option value="Done">Done</option><option value="Pending">Pending</option></>}
                                             </select>
                                         </div>
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">OKR</label>
-                                            <select className="w-full border p-2 rounded-lg text-sm" value={newActivity.okr} onChange={e => setNewActivity({...newActivity, okr: e.target.value})}><option value="Yes">Yes</option><option value="No">No</option></select>
+                                        <div className="col-span-1"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">OKR</label>
+                                            <select className="w-full border p-2 rounded-xl text-sm" value={newActivity.okr} onChange={e => setNewActivity({...newActivity, okr: e.target.value})}><option value="Yes">Yes</option><option value="No">No</option></select>
                                         </div>
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">{newActivity.category === 'Presale' ? 'มูลค่า (M)' : 'ชั่วโมง'}</label>
-                                            <input type="number" step="any" className="w-full border p-2 rounded-lg text-sm" value={newActivity.value} onChange={e => setNewActivity({...newActivity, value: e.target.value})} />
+                                        <div className="col-span-1"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">{newActivity.category === 'Presale' ? 'Val(M)' : 'Hrs'}</label>
+                                            <input type="number" step="any" className="w-full border p-2 rounded-xl text-sm" value={newActivity.value} onChange={e => setNewActivity({...newActivity, value: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div><label className="text-xs font-bold text-indigo-600 uppercase mb-1 block">แผนงานสัปดาห์หน้า</label>
-                                        <input type="text" className="w-full border p-2 rounded-lg text-sm bg-slate-50" value={newActivity.nextWeek} onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})} placeholder="แผนงานขั้นต่อไป..." />
+                                    <div><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">แผนงานสัปดาห์หน้า</label>
+                                        <input type="text" className="w-full border p-2 rounded-xl text-sm bg-slate-50" value={newActivity.nextWeek} onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})} placeholder="Next week plan..." />
                                     </div>
                                     <div className="flex justify-end gap-3 pt-4 border-t">
-                                        <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-slate-400">ยกเลิก</button>
-                                        <button type="submit" className="px-8 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200">บันทึกข้อมูล</button>
+                                        <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm font-bold text-slate-400">Cancel</button>
+                                        <button type="submit" className="px-10 py-2 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-100">บันทึกข้อมูล</button>
                                     </div>
                                 </form>
                             </div>
@@ -502,23 +484,30 @@
             );
         };
 
-        // Standard React mounting logic inside DOM content loaded check
-        window.addEventListener('load', () => {
-            try {
-                const rootElement = document.getElementById('root');
-                if (rootElement) {
-                    const root = ReactDOM.createRoot(rootElement);
-                    root.render(<App />);
+        // --- Reliable Bootstrapper ---
+        function startApp() {
+            const checkDependencies = () => {
+                const isFirebaseReady = window.dbService && window.dbService.status === 'ready';
+                const isRechartsReady = !!window.Recharts;
+                const isReactReady = !!window.ReactDOM;
+
+                if (isFirebaseReady && isRechartsReady && isReactReady) {
+                    try {
+                        const root = ReactDOM.createRoot(document.getElementById('root'));
+                        root.render(<App />);
+                        console.log("App mounted successfully");
+                    } catch (e) {
+                        console.error("Mount error:", e);
+                    }
+                } else {
+                    // Poll until ready
+                    setTimeout(checkDependencies, 300);
                 }
-            } catch (err) {
-                console.error("Mount error:", err);
-                const errEl = document.getElementById('error-message');
-                if (errEl) {
-                    errEl.innerText = "Error during app start: " + err.message;
-                    errEl.classList.remove('hidden');
-                }
-            }
-        });
+            };
+            checkDependencies();
+        }
+
+        window.addEventListener('load', startApp);
     </script>
 </body>
 </html>
