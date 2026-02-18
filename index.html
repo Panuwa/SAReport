@@ -1,0 +1,286 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+  PieChart, Pie, Cell 
+} from 'recharts';
+import { 
+  LayoutDashboard, TrendingUp, Briefcase, Clock, CheckCircle2, 
+  Filter, Calendar, DollarSign, Target, User, Users, Eye, EyeOff, UserCheck 
+} from 'lucide-react';
+
+const MOCK_DATA = [
+  // W07
+  { id: 1, week: 'W07', date: '2026-02-10', quarter: 'Q1', category: 'Presale', task: 'Project Alpha', customer: 'ABC Corp', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'High', value: 2000000, hours: 0, okr: 'Yes' },
+  { id: 2, week: 'W07', date: '2026-02-12', quarter: 'Q1', category: 'BAU', task: 'System Update', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 8, okr: 'Yes' },
+  { id: 3, week: 'W07', date: '2026-02-13', quarter: 'Q1', category: 'Presale', task: 'Project Gamma', customer: 'XYZ Ltd', owner: 'Panuwat', projectManager: 'Somsak', status: 'Proposal', priority: 'High', value: 500000, hours: 0, okr: 'No' },
+  // W08
+  { id: 4, week: 'W08', date: '2026-02-18', quarter: 'Q1', category: 'Presale', task: 'OneWeb Test Plan', customer: 'NT / Maritime', owner: 'Panuwat', projectManager: 'Suda', status: 'Bit', priority: 'High', value: 1500000, hours: 0, okr: 'No' },
+  { id: 5, week: 'W08', date: '2026-02-19', quarter: 'Q1', category: 'BAU', task: 'Weekly Meeting', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 2, okr: 'Yes' },
+  { id: 6, week: 'W08', date: '2026-02-20', quarter: 'Q1', category: 'Presale', task: 'Amazon LEO', customer: 'IFEC Customer', owner: 'Panuwat', projectManager: 'Arnon', status: 'Lead', priority: 'High', value: 3000000, hours: 0, okr: 'Yes' },
+  { id: 7, week: 'W08', date: '2026-02-21', quarter: 'Q1', category: 'BAU', task: 'Support Ticket #44', customer: 'Kbank', owner: 'Panuwat', projectManager: 'Arnon', status: 'In Progress', priority: 'Low', value: 0, hours: 4, okr: 'No' },
+  // W09 (Future Mock)
+  { id: 8, week: 'W09', date: '2026-02-25', quarter: 'Q1', category: 'Presale', task: 'New Hub Setup', customer: 'True', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'Medium', value: 1200000, hours: 0, okr: 'Yes' },
+];
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+const App = () => {
+  const [selectedQuarter, setSelectedQuarter] = useState('Q1');
+  const [selectedWeek, setSelectedWeek] = useState('All');
+  const [showDone, setShowDone] = useState(false); // Default hide 'Done'
+
+  // Filtering Logic
+  const filteredData = useMemo(() => {
+    return MOCK_DATA.filter(item => {
+      const qMatch = selectedQuarter === 'All' || item.quarter === selectedQuarter;
+      const wMatch = selectedWeek === 'All' || item.week === selectedWeek;
+      
+      // Status Filter logic
+      const statusMatch = showDone ? true : item.status !== 'Done'; 
+
+      return qMatch && wMatch && statusMatch;
+    });
+  }, [selectedQuarter, selectedWeek, showDone]);
+
+  // KPIs
+  const totalPresaleValue = filteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? curr.value : 0), 0);
+  const totalBAUHours = filteredData.reduce((acc, curr) => acc + (curr.category === 'BAU' ? curr.hours : 0), 0);
+  const okrCompletion = Math.round((filteredData.filter(d => d.okr === 'Yes').length / filteredData.length) * 100) || 0;
+  const winRate = Math.round((filteredData.filter(d => d.category === 'Presale' && d.status === 'Won').length / 
+                  filteredData.filter(d => d.category === 'Presale').length || 0) * 100);
+
+  // Chart Data: Weekly Performance
+  const weeklyPerformance = useMemo(() => {
+    const weeks = [...new Set(MOCK_DATA.map(d => d.week))].sort();
+    return weeks.map(w => {
+      const items = filteredData.filter(d => d.week === w);
+      return {
+        name: w,
+        presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? curr.value : 0), 0) / 1000000, // In Millions
+        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? curr.hours : 0), 0)
+      };
+    });
+  }, [filteredData]);
+
+  const statusData = useMemo(() => {
+    const counts = {};
+    filteredData.forEach(d => {
+      counts[d.status] = (counts[d.status] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+  }, [filteredData]);
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <LayoutDashboard className="text-blue-600" />
+            Presale & BAU Performance
+          </h1>
+          <p className="text-slate-500">ติดตามผลงานของ Owner (Panuwat)</p>
+        </div>
+
+        <div className="flex flex-wrap gap-3 items-center">
+             {/* Toggle Show/Hide Done */}
+            <button 
+            onClick={() => setShowDone(!showDone)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                showDone 
+                ? 'bg-slate-200 text-slate-700 border-slate-300' 
+                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+            }`}
+            >
+            {showDone ? <Eye size={16} /> : <EyeOff size={16} />}
+            {showDone ? 'Showing Done Tasks' : 'Hiding Done Tasks'}
+            </button>
+
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm text-sm">
+            <Filter size={16} className="text-slate-400" />
+            <select 
+              value={selectedWeek} 
+              onChange={(e) => setSelectedWeek(e.target.value)}
+              className="outline-none bg-transparent cursor-pointer"
+            >
+              <option value="All">All Weeks</option>
+              <option value="W07">Week 07</option>
+              <option value="W08">Week 08</option>
+              <option value="W09">Week 09</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+            <DollarSign size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-slate-500 font-medium">Active Pipeline</p>
+            <h3 className="text-xl font-bold">{(totalPresaleValue / 1000000).toFixed(2)}M</h3>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-slate-500 font-medium">Win Rate</p>
+            <h3 className="text-xl font-bold">{winRate}%</h3>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+            <Clock size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-slate-500 font-medium">Active Man-Hours</p>
+            <h3 className="text-xl font-bold">{totalBAUHours} Hrs</h3>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+            <Target size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-slate-500 font-medium">OKR Progress</p>
+            <h3 className="text-xl font-bold">{okrCompletion}%</h3>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h4 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
+            <Briefcase size={18} className="text-blue-500" />
+            Weekly Performance (Owner)
+          </h4>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyPerformance}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} />
+                <Tooltip />
+                <Legend iconType="circle" />
+                <Bar dataKey="presale" name="Presale (M THB)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="bau" name="BAU Hours" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h4 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
+            <CheckCircle2 size={18} className="text-emerald-500" />
+            Task Status Overview
+          </h4>
+          <div className="h-[300px] flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={statusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {statusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Detail Table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-6 border-b border-slate-100">
+          <h4 className="font-bold text-slate-700">Activity Log</h4>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                <th className="px-6 py-4 font-semibold">Week</th>
+                <th className="px-6 py-4 font-semibold">Category</th>
+                <th className="px-6 py-4 font-semibold">Task/Project</th>
+                <th className="px-6 py-4 font-semibold">Customer</th>
+                <th className="px-6 py-4 font-semibold">Owner</th>
+                <th className="px-6 py-4 font-semibold">Project Manager</th>
+                <th className="px-6 py-4 font-semibold">Priority</th>
+                <th className="px-6 py-4 font-semibold text-center">Status</th>
+                <th className="px-6 py-4 font-semibold text-right">Val/Hrs</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm divide-y divide-slate-100">
+              {filteredData.map((row) => (
+                <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-medium text-slate-400">{row.week}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      row.category === 'Presale' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {row.category}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="font-bold text-slate-700">{row.task}</div>
+                    <div className="text-xs text-slate-400">{row.date}</div>
+                  </td>
+                  <td className="px-6 py-4 text-slate-600">{row.customer}</td>
+                  <td className="px-6 py-4 text-slate-600 font-medium flex items-center gap-1">
+                      <UserCheck size={14} className="text-blue-400" />
+                      {row.owner}
+                  </td>
+                  <td className="px-6 py-4 text-slate-600 font-medium flex items-center gap-1">
+                      <User size={14} className="text-indigo-400" />
+                      {row.projectManager}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-sm ${
+                        row.priority === 'High' ? 'text-rose-600 bg-rose-50' : 
+                        row.priority === 'Medium' ? 'text-amber-600 bg-amber-50' : 'text-slate-500 bg-slate-100'
+                    }`}>
+                        {row.priority}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`text-xs font-medium px-2 py-1 rounded-md ${
+                      row.status === 'Won' || row.status === 'Done' ? 'bg-emerald-50 text-emerald-700' :
+                      row.status === 'Lost' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {row.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right font-mono font-bold">
+                    {row.category === 'Presale' 
+                      ? `${(row.value/1000000).toFixed(1)}M`
+                      : `${row.hours}h`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredData.length === 0 && (
+              <div className="p-8 text-center text-slate-400">
+                  No active tasks found. (Check "Show Completed Tasks" to see done items)
+              </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
