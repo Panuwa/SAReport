@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Presale & BAU Performance Dashboard (Firebase)</title>
+    <title>Presale & BAU Performance Dashboard (Realtime)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -24,9 +24,10 @@
     <!-- Firebase SDKs (Modular) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        // เพิ่ม import onSnapshot, query, orderBy
+        import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- ส่วนที่ 1: วาง Firebase Config ตรงนี้ (ใส่ให้เรียบร้อยแล้วครับ) ---
+        // --- Config ของคุณ ---
         const firebaseConfig = {
             apiKey: "AIzaSyCxcwdUQlVewO2C0fyCXhVYCk7adOlb7Bw",
             authDomain: "sareport-9a853.firebaseapp.com",
@@ -36,23 +37,22 @@
             appId: "1:420538767390:web:3b07cb2bd418b84da0360f",
             measurementId: "G-HT4N05EQQE"
         };
-        // --- จบส่วน Config ---
+        // ------------------
 
         let db = null;
         try {
-            // เช็คว่ามีการใส่ Config หรือยัง (เช็คจาก apiKey)
             if (firebaseConfig.apiKey) {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 console.log("Firebase initialized successfully");
             } else {
-                console.warn("ยังไม่พบ Firebase Config ระบบจะใช้ข้อมูลจำลอง (Mock Data) ไปก่อนครับ");
+                console.warn("Using Mock Data (No Config)");
             }
         } catch (e) {
             console.error("Firebase init error:", e);
         }
 
-        // Expose DB functions to global window for React to use
+        // Expose DB functions including onSnapshot
         window.dbService = {
             db: db,
             getDocs: getDocs,
@@ -60,7 +60,10 @@
             updateDoc: updateDoc,
             deleteDoc: deleteDoc,
             doc: doc,
-            collection: collection
+            collection: collection,
+            onSnapshot: onSnapshot, // เพิ่ม onSnapshot
+            query: query,           // เพิ่ม query
+            orderBy: orderBy        // เพิ่ม orderBy
         };
     </script>
 
@@ -78,8 +81,7 @@
         <div class="flex items-center justify-center min-h-screen">
             <div class="text-center space-y-4">
                 <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p class="text-slate-500 font-medium">Loading Dashboard...</p>
-                <p class="text-sm text-slate-400">Connecting to Firebase...</p>
+                <p class="text-slate-500 font-medium">Connecting to Firebase Realtime...</p>
             </div>
         </div>
     </div>
@@ -120,11 +122,6 @@
             { id: 1, week: 'W07', date: '2026-02-10', quarter: 'Q1', category: 'Presale', task: 'Project Alpha', customer: 'ABC Corp', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'High', value: 2000000, hours: 0, okr: 'Yes', nextWeek: 'Kickoff meeting' },
             { id: 2, week: 'W07', date: '2026-02-12', quarter: 'Q1', category: 'BAU', task: 'System Update', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 8, okr: 'Yes', nextWeek: 'Monitor logs' },
             { id: 3, week: 'W07', date: '2026-02-13', quarter: 'Q1', category: 'Presale', task: 'Project Gamma', customer: 'XYZ Ltd', owner: 'Panuwat', projectManager: 'Somsak', status: 'Proposal', priority: 'High', value: 500000, hours: 0, okr: 'No', nextWeek: 'Submit pricing' },
-            { id: 4, week: 'W08', date: '2026-02-18', quarter: 'Q1', category: 'Presale', task: 'OneWeb Test Plan', customer: 'NT / Maritime', owner: 'Panuwat', projectManager: 'Suda', status: 'Bit', priority: 'High', value: 1500000, hours: 0, okr: 'No', nextWeek: 'Field test @ Chonburi' },
-            { id: 5, week: 'W08', date: '2026-02-19', quarter: 'Q1', category: 'BAU', task: 'Weekly Meeting', customer: 'Internal', owner: 'Panuwat', projectManager: 'Wichai', status: 'Done', priority: 'Medium', value: 0, hours: 2, okr: 'Yes', nextWeek: 'Prepare slides' },
-            { id: 6, week: 'W08', date: '2026-02-20', quarter: 'Q1', category: 'Presale', task: 'Amazon LEO', customer: 'IFEC Customer', owner: 'Panuwat', projectManager: 'Arnon', status: 'Lead', priority: 'High', value: 3000000, hours: 0, okr: 'Yes', nextWeek: 'Demo session' },
-            { id: 7, week: 'W08', date: '2026-02-21', quarter: 'Q1', category: 'BAU', task: 'Support Ticket #44', customer: 'Kbank', owner: 'Panuwat', projectManager: 'Arnon', status: 'In Progress', priority: 'Low', value: 0, hours: 4, okr: 'No', nextWeek: 'Close ticket' },
-            { id: 8, week: 'W09', date: '2026-02-25', quarter: 'Q1', category: 'Presale', task: 'New Hub Setup', customer: 'True', owner: 'Panuwat', projectManager: 'Somsak', status: 'Won', priority: 'Medium', value: 1200000, hours: 0, okr: 'Yes', nextWeek: 'Install hardware' },
         ];
 
         const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -143,7 +140,7 @@
              return 'Q' + Math.ceil(month / 3);
         };
 
-        // --- Login Component with Password ---
+        // --- Login Component ---
         const LoginScreen = ({ onLogin }) => {
             const [password, setPassword] = useState('');
             const [error, setError] = useState('');
@@ -212,20 +209,18 @@
         };
 
         const App = () => {
-            const [user, setUser] = useState(null); // { role: 'admin' | 'viewer' }
+            const [user, setUser] = useState(null);
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
             const [isFirebase, setIsFirebase] = useState(false);
+            const [firebaseError, setFirebaseError] = useState(null);
             
             const [selectedQuarter, setSelectedQuarter] = useState('Q1');
             const [selectedWeek, setSelectedWeek] = useState('All');
             const [showDone, setShowDone] = useState(false);
             const [showModal, setShowModal] = useState(false);
-            
-            // Edit State
             const [editingId, setEditingId] = useState(null);
 
-            // Form State
             const [newActivity, setNewActivity] = useState({
                 date: new Date().toISOString().split('T')[0],
                 category: 'Presale',
@@ -240,35 +235,56 @@
                 nextWeek: '' 
             });
 
-            // Fetch Data
+            // *** Realtime Data Listener ***
             useEffect(() => {
-                const fetchData = async () => {
-                    const { db, getDocs, collection } = window.dbService || {};
+                let unsubscribe;
+
+                const connectToFirebase = () => {
+                    const { db, collection, onSnapshot, query, orderBy } = window.dbService || {};
+                    
                     if (db) {
                         try {
-                            const querySnapshot = await getDocs(collection(db, "tasks"));
-                            const firebaseData = [];
-                            querySnapshot.forEach((doc) => firebaseData.push({ id: doc.id, ...doc.data() }));
-                            if (firebaseData.length > 0) {
+                            // ใช้ onSnapshot เพื่อฟังข้อมูลแบบ Realtime
+                            const q = query(collection(db, "tasks")); // สามารถใส่ orderBy("date", "desc") ได้ถ้าต้องการ
+                            
+                            unsubscribe = onSnapshot(q, (snapshot) => {
+                                const firebaseData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                                // เรียงข้อมูลตามวันที่ (ใหม่สุดขึ้นก่อน)
+                                firebaseData.sort((a, b) => new Date(b.date) - new Date(a.date));
+                                
                                 setData(firebaseData);
                                 setIsFirebase(true);
-                            } else {
-                                setData(MOCK_DATA);
-                            }
-                        } catch (error) {
-                            console.error("Error fetching:", error);
+                                setLoading(false);
+                                setFirebaseError(null);
+                            }, (error) => {
+                                console.error("Firebase Snapshot Error:", error);
+                                // ถ้า Error (เช่น Permission Denied) ให้ใช้ Mock Data
+                                setFirebaseError("Permission Denied: Please check Firestore Rules.");
+                                setIsFirebase(false); 
+                                setData(MOCK_DATA); 
+                                setLoading(false);
+                            });
+                        } catch (e) {
+                            console.error("Setup Error:", e);
                             setData(MOCK_DATA);
+                            setLoading(false);
                         }
                     } else {
-                        setData(MOCK_DATA);
+                        // Retry ถ้า script ยังโหลดไม่เสร็จ
+                        if(typeof window.dbService === 'undefined') {
+                             setTimeout(connectToFirebase, 500);
+                        } else {
+                             setData(MOCK_DATA);
+                             setLoading(false);
+                        }
                     }
-                    setLoading(false);
                 };
-                
-                if (user) {
-                     // In real app, might fetch here.
-                }
-                setTimeout(fetchData, 500);
+
+                connectToFirebase();
+
+                return () => {
+                    if (unsubscribe) unsubscribe();
+                };
             }, []);
 
             // Open Modal for Add
@@ -317,9 +333,9 @@
 
                 if (db && isFirebase) {
                     try {
+                        // ลบจาก Firebase (Listener จะอัปเดตหน้าจอเอง)
                         await deleteDoc(doc(db, "tasks", item.id));
-                        setData(data.filter(d => d.id !== item.id));
-                        alert("Deleted successfully!");
+                        // alert("Deleted successfully!"); // ไม่ต้อง alert ก็ได้เพราะ UI จะหายไปเอง
                     } catch (e) {
                         console.error("Error deleting document: ", e);
                         alert("Error deleting from Firebase.");
@@ -351,21 +367,19 @@
                 if (db && isFirebase) {
                     try {
                         if (editingId) {
-                            // Edit Mode
+                            // Edit Mode -> Update Firebase
                             const docRef = doc(db, "tasks", editingId);
                             await updateDoc(docRef, payload);
-                            // Update local state
-                            setData(data.map(item => item.id === editingId ? { ...item, ...payload } : item));
-                            alert("Updated successfully!");
+                            // ไม่ต้อง setData เอง Listener จะทำหน้าที่นี้
                         } else {
-                            // Add Mode
-                            const docRef = await addDoc(collection(db, "tasks"), payload);
-                            setData([...data, { id: docRef.id, ...payload }]);
-                            alert("Added successfully!");
+                            // Add Mode -> Add to Firebase
+                            await addDoc(collection(db, "tasks"), payload);
+                            // ไม่ต้อง setData เอง Listener จะทำหน้าที่นี้
                         }
+                        // alert("Saved successfully!");
                     } catch (e) {
                         console.error("Error saving document: ", e);
-                        alert("Error saving to Firebase.");
+                        alert("Error saving to Firebase: " + e.message);
                     }
                 } else {
                     // Local Mock Update
@@ -447,9 +461,14 @@
                                 <span className="text-slate-300">|</span>
                                 <p className="text-slate-500 text-sm">Owner: Panuwat</p>
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${isFirebase ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                                    {isFirebase ? '● Live Data' : '○ Mock Data'}
+                                    {isFirebase ? '● Live Data (Firebase)' : '○ Mock Data (Local)'}
                                 </span>
                             </div>
+                            {firebaseError && (
+                                <div className="mt-2 text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2 rounded">
+                                    ⚠️ {firebaseError}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-wrap gap-3 items-center">
