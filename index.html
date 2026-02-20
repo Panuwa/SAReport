@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Performance Dashboard (Full Features)</title>
+    <title>SA Performance Dashboard (Full Features)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -95,7 +95,7 @@
             LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />
         };
 
-        const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+        const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
 
         const getWeekNumber = (dateStr) => {
             const date = new Date(dateStr);
@@ -119,7 +119,7 @@
             return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 text-left">
                     <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md space-y-4">
-                        <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">P P Dashboard</h2>
+                        <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">Dashboard Login</h2>
                         <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" />
                         <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" />
                         {error && <p className="text-rose-500 text-xs font-bold text-center bg-rose-50 p-3 rounded-xl border border-rose-100">{error}</p>}
@@ -137,13 +137,22 @@
             const [editingId, setEditingId] = useState(null);
             const [showDone, setShowDone] = useState(true);
             const [selectedWeek, setSelectedWeek] = useState('All');
+            const [currentTime, setCurrentTime] = useState(new Date());
 
+            // Default State
             const [newActivity, setNewActivity] = useState({
                 date: new Date().toISOString().split('T')[0],
                 startDate: new Date().toISOString().split('T')[0],
                 category: 'Presale', task: '', note: '', customer: '', 
-                projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes'
+                projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes',
+                subCategory: 'Technical Consultancy' // New default for Op Support
             });
+
+            // Live Time Setup
+            useEffect(() => {
+                const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
 
             // Auth Check
             useEffect(() => {
@@ -196,11 +205,14 @@
             // KPIs
             const kpis = useMemo(() => {
                 const presale = filteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0);
-                const bau = filteredData.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0);
+                // Combine BAU and Operational Support for Hours tracking
+                const bauAndOps = filteredData.reduce((acc, curr) => acc + (['BAU', 'Operational Support'].includes(curr.category) ? Number(curr.hours || 0) : 0), 0);
+                
                 const winItems = filteredData.filter(d => d.category === 'Presale');
                 const winRate = winItems.length ? Math.round((winItems.filter(d => d.status === 'Won').length / winItems.length) * 100) : 0;
+                
                 const okrRate = filteredData.length ? Math.round((filteredData.filter(d => d.okr === 'Yes').length / filteredData.length) * 100) : 0;
-                return { presale, bau, winRate, okrRate };
+                return { presale, bauAndOps, winRate, okrRate };
             }, [filteredData]);
 
             // Chart Data
@@ -211,7 +223,8 @@
                     return {
                         name: w,
                         presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0),
-                        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0)
+                        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0),
+                        opSupport: items.reduce((acc, curr) => acc + (curr.category === 'Operational Support' ? Number(curr.hours || 0) : 0), 0)
                     };
                 });
             }, [data]);
@@ -223,6 +236,7 @@
                     date: item.date || "",
                     startDate: item.startDate || item.date || "",
                     category: item.category || "Presale",
+                    subCategory: item.subCategory || "Technical Consultancy",
                     task: item.task || "",
                     note: item.note || "",
                     customer: item.customer || "",
@@ -239,10 +253,13 @@
             const handleAddSubmit = async (e) => {
                 e.preventDefault();
                 const { db, addDoc, updateDoc, doc, collection } = window.dbService;
+                const isOpSupport = newActivity.category === 'Operational Support';
+                
                 const payload = {
                     ...newActivity,
+                    subCategory: isOpSupport ? newActivity.subCategory : '',
                     week: getWeekNumber(newActivity.date),
-                    hours: newActivity.category === 'BAU' ? Number(newActivity.value) : 0,
+                    hours: ['BAU', 'Operational Support'].includes(newActivity.category) ? Number(newActivity.value) : 0,
                     value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
                     updatedAt: new Date().toISOString()
                 };
@@ -256,36 +273,51 @@
             if (loading) return null;
             if (!user) return <LoginScreen />;
 
+            // Date Formatting
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const formattedDate = currentTime.toLocaleDateString('en-US', dateOptions);
+            const formattedTime = currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
             return (
                 <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-                    {/* Header with Week Filter */}
+                    {/* Top Header */}
                     <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                        <div>
-                            <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">Performance Dashboard</h1>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{user.email}</span>
-                                <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">{user.role}</span>
+                        <div className="flex justify-between w-full lg:w-auto">
+                            <div>
+                                <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">SA Performance Dashboard</h1>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{user.email}</span>
+                                    <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">{user.role}</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-                            {/* WEEK FILTER UI */}
-                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-xs font-black group">
-                                <span className="text-slate-400 group-hover:text-blue-600 transition-colors">{Icons.Filter}</span>
-                                <span className="text-slate-500 uppercase">WEEK:</span>
-                                <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-transparent outline-none uppercase font-black text-blue-600">
-                                    <option value="All">All Weeks</option>
-                                    {uniqueWeeks.map(w => <option key={w} value={w}>{w}</option>)}
-                                </select>
+                        
+                        <div className="flex flex-col lg:flex-row flex-wrap gap-4 w-full lg:w-auto lg:items-center">
+                            {/* Live Date Time Display */}
+                            <div className="text-left lg:text-right px-4 lg:border-r border-slate-200">
+                                <p className="text-sm font-black text-slate-700">{formattedDate}</p>
+                                <p className="text-xs font-bold text-blue-500 uppercase tracking-widest">{formattedTime}</p>
                             </div>
-                            
-                            {user.role === 'admin' && (
-                                <button onClick={() => { setEditingId(null); setShowModal(true); }} className="bg-blue-600 text-white px-6 py-2.5 rounded-2xl text-xs font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center gap-2">
-                                    {Icons.Plus} Add Activity
+
+                            <div className="flex gap-2 w-full lg:w-auto">
+                                {/* WEEK FILTER UI */}
+                                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-xs font-black group">
+                                    <span className="text-slate-400 group-hover:text-blue-600 transition-colors">{Icons.Filter}</span>
+                                    <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-transparent outline-none uppercase font-black text-blue-600">
+                                        <option value="All">All Weeks</option>
+                                        {uniqueWeeks.map(w => <option key={w} value={w}>{w}</option>)}
+                                    </select>
+                                </div>
+                                
+                                {user.role === 'admin' && (
+                                    <button onClick={() => { setEditingId(null); setShowModal(true); }} className="bg-blue-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow lg:flex-grow-0">
+                                        {Icons.Plus} Add
+                                    </button>
+                                )}
+                                <button onClick={() => window.dbService.signOut(window.dbService.auth)} className="bg-white border border-slate-200 text-slate-500 px-4 py-2.5 rounded-2xl text-xs font-black hover:bg-slate-50 uppercase flex items-center justify-center gap-2 flex-grow lg:flex-grow-0">
+                                    {Icons.LogOut}
                                 </button>
-                            )}
-                            <button onClick={() => window.dbService.signOut(window.dbService.auth)} className="bg-white border border-slate-200 text-slate-500 px-4 py-2.5 rounded-2xl text-xs font-black hover:bg-slate-50 uppercase flex items-center gap-2">
-                                {Icons.LogOut}
-                            </button>
+                            </div>
                         </div>
                     </header>
 
@@ -301,7 +333,7 @@
                         </div>
                         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
                             <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:bg-amber-600 group-hover:text-white transition-all">{Icons.Clock}</div>
-                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">BAU Hours</p><h3 className="text-xl font-black">{kpis.bau}h</h3></div>
+                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">BAU & Ops Hrs</p><h3 className="text-xl font-black">{kpis.bauAndOps}h</h3></div>
                         </div>
                         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
                             <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl group-hover:bg-purple-600 group-hover:text-white transition-all">{Icons.Target}</div>
@@ -326,6 +358,7 @@
                                             <Legend iconType="circle" />
                                             <Bar dataKey="presale" name="Presale (M)" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                                             <Bar dataKey="bau" name="BAU (Hrs)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                                            <Bar dataKey="opSupport" name="Op Support (Hrs)" fill="#14b8a6" radius={[6, 6, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -359,7 +392,7 @@
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
                                     <tr>
-                                        <th className="px-6 py-5">Week / Task Name</th>
+                                        <th className="px-6 py-5">Week / Category / Task</th>
                                         <th className="px-6 py-5 bg-blue-50/50">Activity Note (สัปดาห์นี้ทำอะไร)</th>
                                         <th className="px-6 py-5">Project Manager</th>
                                         <th className="px-6 py-5 text-center">Status</th>
@@ -372,8 +405,21 @@
                                     {filteredData.map(row => (
                                         <tr key={row.id} className="hover:bg-slate-50 group transition-all">
                                             <td className="px-6 py-5">
-                                                <div className="text-blue-500 font-black text-[10px] uppercase mb-1">{row.week}</div>
-                                                <div className="font-black text-slate-800 text-base leading-tight">{row.task}</div>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-blue-500 font-black text-[10px] uppercase">{row.week}</span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                                        row.category === 'Presale' ? 'bg-blue-100 text-blue-700' : 
+                                                        row.category === 'BAU' ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'
+                                                    }`}>
+                                                        {row.category}
+                                                    </span>
+                                                </div>
+                                                <div className="font-black text-slate-800 text-base leading-tight">
+                                                    {row.task}
+                                                </div>
+                                                {row.category === 'Operational Support' && row.subCategory && (
+                                                    <div className="text-[10px] text-teal-600 font-bold mt-1">({row.subCategory})</div>
+                                                )}
                                                 <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-2 font-bold bg-slate-100 w-fit px-2 py-0.5 rounded">
                                                     {Icons.Calendar} Start: {row.startDate || row.date}
                                                 </div>
@@ -403,7 +449,7 @@
                                                 {row.category === 'Presale' ? `${Number(row.value || 0).toFixed(1)}M` : '-'}
                                             </td>
                                             <td className="px-6 py-5 text-right font-mono font-black text-amber-600 text-lg">
-                                                {row.category === 'BAU' ? `${row.hours || 0}h` : '-'}
+                                                {['BAU', 'Operational Support'].includes(row.category) ? `${row.hours || 0}h` : '-'}
                                             </td>
                                             <td className="px-6 py-5 text-center">
                                                 <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -439,14 +485,31 @@
                                             <input type="date" className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ประเภทงาน</label>
-                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none" value={newActivity.category} onChange={e => setNewActivity({...newActivity, category: e.target.value})}><option value="Presale">Presale</option><option value="BAU">BAU</option></select>
+                                    
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ประเภทงาน (Category)</label>
+                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none bg-slate-50" value={newActivity.category} onChange={e => setNewActivity({...newActivity, category: e.target.value})}>
+                                                <option value="Presale">Presale</option>
+                                                <option value="BAU">BAU</option>
+                                                <option value="Operational Support">Operational Support</option>
+                                            </select>
                                         </div>
+                                        
+                                        {/* Dynamic Sub-Category for Operational Support */}
+                                        {newActivity.category === 'Operational Support' && (
+                                            <div><label className="text-[10px] font-black text-teal-500 uppercase mb-2 block ml-1">หมวดย่อย (Sub-Category)</label>
+                                                <select className="w-full border border-teal-200 p-3 rounded-2xl text-sm outline-none bg-teal-50 text-teal-800 font-bold" value={newActivity.subCategory} onChange={e => setNewActivity({...newActivity, subCategory: e.target.value})}>
+                                                    <option value="Technical Consultancy">Technical Consultancy</option>
+                                                    <option value="Provisioning">Provisioning</option>
+                                                </select>
+                                            </div>
+                                        )}
+
                                         <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ชื่อโครงการ / Task</label>
                                             <input type="text" required placeholder="ชื่อโครงการ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
                                         </div>
                                     </div>
+
                                     <div><label className="text-[10px] font-black text-blue-600 uppercase mb-2 block ml-1 underline tracking-wider">รายละเอียดสิ่งที่ทำในสัปดาห์นี้</label>
                                         <textarea required rows="4" className="w-full border border-blue-100 p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30 font-bold placeholder-blue-300" 
                                             value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="ระบุสิ่งที่ทำลงไปในสัปดาห์นี้..."></textarea>
