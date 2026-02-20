@@ -145,7 +145,7 @@
                 startDate: new Date().toISOString().split('T')[0],
                 category: 'Presale', task: '', note: '', customer: '', 
                 projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes',
-                subCategory: 'Technical Consultancy' // New default for Op Support
+                subCategory: 'Technical Consultancy' 
             });
 
             // Live Time Setup
@@ -270,6 +270,22 @@
                 } catch (err) { alert("Error: " + err.message); }
             };
 
+            // FIX: Handle Category Change to auto-update Default Status
+            const handleCategoryChange = (e) => {
+                const newCat = e.target.value;
+                let defaultStatus = 'In Progress'; // Default for BAU and Operational Support
+                if (newCat === 'Presale') {
+                    defaultStatus = 'Proposal'; // Default for Presale
+                }
+                
+                setNewActivity({
+                    ...newActivity, 
+                    category: newCat, 
+                    status: defaultStatus,
+                    subCategory: newCat === 'Operational Support' ? 'Technical Consultancy' : ''
+                });
+            };
+
             if (loading) return null;
             if (!user) return <LoginScreen />;
 
@@ -310,7 +326,17 @@
                                 </div>
                                 
                                 {user.role === 'admin' && (
-                                    <button onClick={() => { setEditingId(null); setShowModal(true); }} className="bg-blue-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow lg:flex-grow-0">
+                                    <button onClick={() => { 
+                                        setEditingId(null); 
+                                        setNewActivity({
+                                            date: new Date().toISOString().split('T')[0],
+                                            startDate: new Date().toISOString().split('T')[0],
+                                            category: 'Presale', task: '', note: '', customer: '', 
+                                            projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes',
+                                            subCategory: 'Technical Consultancy' 
+                                        });
+                                        setShowModal(true); 
+                                    }} className="bg-blue-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow lg:flex-grow-0">
                                         {Icons.Plus} Add
                                     </button>
                                 )}
@@ -488,7 +514,7 @@
                                     
                                     <div className="grid grid-cols-1 gap-4">
                                         <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ประเภทงาน (Category)</label>
-                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none bg-slate-50" value={newActivity.category} onChange={e => setNewActivity({...newActivity, category: e.target.value})}>
+                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none bg-slate-50" value={newActivity.category} onChange={handleCategoryChange}>
                                                 <option value="Presale">Presale</option>
                                                 <option value="BAU">BAU</option>
                                                 <option value="Operational Support">Operational Support</option>
