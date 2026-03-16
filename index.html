@@ -1,599 +1,458 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SA Performance Dashboard (Full Features)</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Dek71 Tracker">
+    <title>Dek71 Mission Control: Secured</title>
     
     <!-- React & ReactDOM -->
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    
-    <!-- Prop Types -->
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
-    
-    <!-- Recharts -->
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.3/Recharts.min.js"></script>
-    
-    <!-- Babel -->
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyCxcwdUQlVewO2C0fyCXhVYCk7adOlb7Bw",
-            authDomain: "sareport-9a853.firebaseapp.com",
-            projectId: "sareport-9a853",
-            storageBucket: "sareport-9a853.firebasestorage.app",
-            messagingSenderId: "420538767390",
-            appId: "1:420538767390:web:3b07cb2bd418b84da0360f",
-            measurementId: "G-HT4N05EQQE"
-        };
-
-        try {
-            const app = initializeApp(firebaseConfig);
-            const db = getFirestore(app);
-            const auth = getAuth(app);
-            
-            window.dbService = {
-                db, auth,
-                addDoc, updateDoc, deleteDoc, doc, collection, onSnapshot, query, orderBy,
-                signInWithEmailAndPassword, signOut, onAuthStateChanged,
-                status: 'ready'
-            };
-        } catch (e) {
-            console.error("Firebase error:", e);
-        }
-    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; }
-        .modal-overlay { animation: fadeIn 0.2s ease-out; }
-        .modal-content { animation: slideUp 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        body { 
+            font-family: 'Noto Sans Thai', sans-serif; 
+            background-color: #f1f5f9; 
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .slide-up { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        input[type="checkbox"] { accent-color: #4f46e5; transform: scale(1.1); cursor: pointer; }
+        input:disabled { opacity: 0.5; cursor: not-allowed; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-900">
-    <div id="root">
-        <div class="flex items-center justify-center min-h-screen bg-slate-50">
-            <div class="text-center">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">กำลังเตรียมหน้าจอ Dashboard...</p>
-            </div>
-        </div>
-    </div>
+<body>
+    <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts || {};
+        // ==========================================
+        // --- 1. FIREBASE CONFIGURATION ---
+        // ==========================================
+        const firebaseConfig = {
+          apiKey: "AIzaSyDXQ9TIM1NbyR-PJNbVO74Cf_1w3hDWuGM",
+          authDomain: "dek71-8af86.firebaseapp.com",
+          projectId: "dek71-8af86",
+          storageBucket: "dek71-8af86.firebasestorage.app",
+          messagingSenderId: "885325722595",
+          appId: "1:885325722595:web:f79d36e1b78651217ea6d6",
+          measurementId: "G-YDCNM0C1FR"
+        };
 
-        // --- Icons ---
-        const Icon = ({ path, color = "currentColor", size = 18 }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                {path}
-            </svg>
-        );
+        let db;
+        try {
+            if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            if (typeof firebase !== 'undefined') {
+                db = firebase.firestore();
+            }
+        } catch (e) {
+            console.error("Firebase Init Error:", e);
+        }
+
+        // ==========================================
+        // --- 2. DATA & ASSETS ---
+        // ==========================================
+        
+        const MASTER_CURRICULUM = {
+            tpat1: ["เชาวน์ปัญญา", "จริยธรรมแพทย์", "ความเชื่อมโยง"],
+            math1: ["เซต/ตรรกศาสตร์", "จำนวนจริง", "ฟังก์ชัน", "เรขาคณิต", "Expo/Log", "ตรีโกณ", "เมทริกซ์", "เวกเตอร์", "เชิงซ้อน", "ความน่าจะเป็น", "ลำดับอนุกรม", "แคลคูลัส", "สถิติ"],
+            phy: ["กลศาสตร์ 1", "กลศาสตร์ 2", "คลื่น/แสง/เสียง", "ไฟฟ้า", "สสาร/ความร้อน", "ฟิสิกส์อะตอม"],
+            chem: ["อะตอม/ตารางธาตุ", "พันธะเคมี", "ปริมาณสาร", "ของแข็ง/เหลว/แก๊ส", "อัตรา/สมดุล", "กรด-เบส", "ไฟฟ้าเคมี", "อินทรีย์", "พอลิเมอร์"],
+            bio: ["พื้นฐานชีวะ/เซลล์", "ระบบร่างกายสัตว์", "พืช", "พันธุศาสตร์", "ระบบนิเวศ"],
+            eng: ["Vocabulary 3000", "Reading", "Conversation", "Grammar", "Writing"],
+            thai: ["หลักภาษา", "การอ่าน/เขียน", "วรรณคดี"],
+            soc: ["ศาสนา", "หน้าที่พลเมือง", "เศรษฐศาสตร์", "ประวัติศาสตร์", "ภูมิศาสตร์"]
+        };
 
         const Icons = {
-            Plus: <Icon path={<><path d="M5 12h14" /><path d="M12 5v14" /></>} />,
-            Edit: <Icon path={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>} />,
-            Trash: <Icon path={<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>} />,
-            Filter: <Icon path={<><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></>} />,
-            User: <Icon path={<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>} />,
-            Calendar: <Icon path={<><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>} />,
-            Dollar: <Icon path={<><line x1="12" x2="12" y1="2" y2="22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>} />,
-            Clock: <Icon path={<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>} />,
-            Target: <Icon path={<><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>} />,
-            LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>} />
+            Target: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+            Book: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+            Brain: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+            Close: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+            Cloud: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19"/><path d="M12 13.5v-8"/><path d="m15 8.5-3-3-3 3"/><path d="M12 2a8 8 0 0 1 8 8c0 3.86-2.5 7.144-6 8"/></svg>,
+            Flag: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,
+            Trophy: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10"/><path d="M17 4v6a5 5 0 1 1-10 0V4"/><line x1="7" y1="9" x2="17" y2="9"/></svg>,
+            Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+            Lock: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>,
+            Unlock: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
         };
 
-        const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
+        // --- 3. COMPONENTS ---
 
-        const getWeekNumber = (dateStr) => {
-            const date = new Date(dateStr);
-            const onejan = new Date(date.getFullYear(), 0, 1);
-            const week = Math.ceil((((date - onejan) / 86400000) + onejan.getDay() + 1) / 7);
-            return `W${week.toString().padStart(2, '0')}`;
-        };
-
-        const LoginScreen = () => {
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-            const [error, setError] = useState('');
-            const handleLogin = async (e) => {
-                e.preventDefault();
-                try {
-                    await window.dbService.signInWithEmailAndPassword(window.dbService.auth, email.trim(), password);
-                } catch (err) {
-                    setError("ล็อกอินไม่สำเร็จ กรุณาตรวจสอบอีเมลและรหัสผ่าน");
-                }
-            };
+        const ScoreChart = ({ history, targetScore }) => {
+            if (!history || history.length < 2) return <div className="h-32 flex items-center justify-center text-gray-400 text-xs border border-dashed rounded-lg">บันทึก 2 ครั้งเพื่อดูกราฟ</div>;
+            
+            const height = 100, width = 400, padding = 10;
+            const points = history.map((entry, index) => {
+                const xStep = (width - padding * 2) / (history.length - 1);
+                const x = padding + index * xStep;
+                const y = height - padding - (entry.score / 100) * (height - padding * 2);
+                return `${x},${y}`;
+            }).join(' ');
+            
             return (
-                <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 text-left">
-                    <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md space-y-4">
-                        <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">Dashboard Login</h2>
-                        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" />
-                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" />
-                        {error && <p className="text-rose-500 text-xs font-bold text-center bg-rose-50 p-3 rounded-xl border border-rose-100">{error}</p>}
-                        <button type="submit" className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-widest">เข้าสู่ระบบ</button>
-                    </form>
+                <div className="w-full overflow-hidden mb-4">
+                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full bg-white rounded-lg border border-gray-100">
+                        <polyline points={points} fill="none" stroke="#4f46e5" strokeWidth="2" />
+                        {history.map((entry, i) => {
+                            const x = padding + i * ((width - padding * 2) / (history.length - 1));
+                            const y = height - padding - (entry.score / 100) * (height - padding * 2);
+                            return <circle key={i} cx={x} cy={y} r="3" fill="#fff" stroke="#4f46e5" strokeWidth="2" />;
+                        })}
+                    </svg>
                 </div>
             );
         };
 
-        const App = () => {
-            const [user, setUser] = useState(null);
-            const [data, setData] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [showModal, setShowModal] = useState(false);
-            const [editingId, setEditingId] = useState(null);
-            const [showDone, setShowDone] = useState(true);
-            const [selectedWeek, setSelectedWeek] = useState('All');
-            const [currentTime, setCurrentTime] = useState(new Date());
-
-            // Default State
-            const [newActivity, setNewActivity] = useState({
-                date: new Date().toISOString().split('T')[0],
-                startDate: new Date().toISOString().split('T')[0],
-                category: 'Presale', task: '', note: '', customer: '', 
-                projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes',
-                subCategory: 'Technical Consultancy' 
-            });
-
-            // Live Time Setup
-            useEffect(() => {
-                const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-                return () => clearInterval(timer);
-            }, []);
-
-            // Auth Check
-            useEffect(() => {
-                const svc = window.dbService;
-                if (!svc || !svc.auth) return;
-                const unsubscribe = svc.onAuthStateChanged(svc.auth, (fbUser) => {
-                    if (fbUser) {
-                        const email = fbUser.email.toLowerCase();
-                        const isAdmin = email.includes('admin') || email === 'panuwatk@gmail.com';
-                        setUser({ email: fbUser.email, role: isAdmin ? 'admin' : 'viewer' });
-                    } else { setUser(null); }
-                    setLoading(false);
-                });
-                return () => unsubscribe();
-            }, []);
-
-            // Data Fetching
-            useEffect(() => {
-                if (!user || !window.dbService.db) return;
-                const { db, collection, onSnapshot, query, orderBy } = window.dbService;
-                const q = query(collection(db, "tasks"), orderBy("date", "desc"));
-                const unsubscribe = onSnapshot(q, (snapshot) => {
-                    const docs = snapshot.docs.map(doc => {
-                        const d = doc.data();
-                        return { 
-                            id: doc.id, 
-                            ...d,
-                            note: d.note || d.activityNote || d.activity || "" 
-                        };
-                    });
-                    setData(docs);
-                });
-                return () => unsubscribe();
-            }, [user]);
-
-            // Filters & Unique Weeks
-            const uniqueWeeks = useMemo(() => {
-                const weeks = [...new Set(data.map(d => d.week))].filter(Boolean).sort();
-                return weeks;
-            }, [data]);
-            
-            const filteredData = useMemo(() => {
-                return data.filter(item => {
-                    const weekMatch = selectedWeek === 'All' || item.week === selectedWeek;
-                    const statusMatch = showDone ? true : item.status !== 'Done';
-                    return weekMatch && statusMatch;
-                });
-            }, [data, selectedWeek, showDone]);
-
-            // KPIs
-            const kpis = useMemo(() => {
-                const presale = filteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0);
-                // Combine BAU and Operational Support for Hours tracking
-                const bauAndOps = filteredData.reduce((acc, curr) => acc + (['BAU', 'Operational Support'].includes(curr.category) ? Number(curr.hours || 0) : 0), 0);
-                
-                const winItems = filteredData.filter(d => d.category === 'Presale');
-                const winRate = winItems.length ? Math.round((winItems.filter(d => d.status === 'Won').length / winItems.length) * 100) : 0;
-                
-                const okrRate = filteredData.length ? Math.round((filteredData.filter(d => d.okr === 'Yes').length / filteredData.length) * 100) : 0;
-                return { presale, bauAndOps, winRate, okrRate };
-            }, [filteredData]);
-
-            // Chart Data
-            const chartData = useMemo(() => {
-                const weeks = [...new Set(data.map(d => d.week))].sort().slice(-6);
-                return weeks.map(w => {
-                    const items = data.filter(d => d.week === w);
-                    return {
-                        name: w,
-                        presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0),
-                        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0),
-                        opSupport: items.reduce((acc, curr) => acc + (curr.category === 'Operational Support' ? Number(curr.hours || 0) : 0), 0)
-                    };
-                });
-            }, [data]);
-
-            // Modal Handlers
-            const handleEdit = (item) => {
-                setEditingId(item.id);
-                setNewActivity({
-                    date: item.date || "",
-                    startDate: item.startDate || item.date || "",
-                    category: item.category || "Presale",
-                    subCategory: item.subCategory || "Technical Consultancy",
-                    task: item.task || "",
-                    note: item.note || "",
-                    customer: item.customer || "",
-                    projectManager: item.projectManager || "",
-                    priority: item.priority || "Medium",
-                    status: item.status || "Proposal",
-                    value: item.category === 'Presale' ? (item.value || 0) : (item.hours || 0),
-                    nextWeek: item.nextWeek || "",
-                    okr: item.okr || "Yes"
-                });
-                setShowModal(true);
-            };
-
-            const handleAddSubmit = async (e) => {
-                e.preventDefault();
-                const { db, addDoc, updateDoc, doc, collection } = window.dbService;
-                const isOpSupport = newActivity.category === 'Operational Support';
-                
-                const payload = {
-                    ...newActivity,
-                    subCategory: isOpSupport ? newActivity.subCategory : '',
-                    week: getWeekNumber(newActivity.date),
-                    hours: ['BAU', 'Operational Support'].includes(newActivity.category) ? Number(newActivity.value) : 0,
-                    value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
-                    updatedAt: new Date().toISOString()
-                };
-                try {
-                    if (editingId) { await updateDoc(doc(db, "tasks", editingId), payload); }
-                    else { await addDoc(collection(db, "tasks"), payload); }
-                    setShowModal(false);
-                } catch (err) { alert("Error: " + err.message); }
-            };
-
-            // FIX: Handle Category Change to auto-update Default Status
-            const handleCategoryChange = (e) => {
-                const newCat = e.target.value;
-                let defaultStatus = 'In Progress'; // Default for BAU and Operational Support
-                if (newCat === 'Presale') {
-                    defaultStatus = 'Proposal'; // Default for Presale
-                }
-                
-                setNewActivity({
-                    ...newActivity, 
-                    category: newCat, 
-                    status: defaultStatus,
-                    subCategory: newCat === 'Operational Support' ? 'Technical Consultancy' : ''
-                });
-            };
-
-            if (loading) return null;
-            if (!user) return <LoginScreen />;
-
-            // Date Formatting
-            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            const formattedDate = currentTime.toLocaleDateString('en-US', dateOptions);
-            const formattedTime = currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const SubjectModal = ({ subject, isAdmin, onClose, onUpdateTopic, onToggleReview, onAddScore, onDeleteScore, onUpdateTarget }) => {
+            if (!subject) return null;
+            const [newScore, setNewScore] = React.useState('');
+            const [newDate, setNewDate] = React.useState(new Date().toISOString().split('T')[0]);
 
             return (
-                <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-                    {/* Top Header */}
-                    <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                        <div className="flex justify-between w-full lg:w-auto">
-                            <div>
-                                <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">SA Performance Dashboard</h1>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{user.email}</span>
-                                    <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">{user.role}</span>
-                                </div>
-                            </div>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl z-10 flex flex-col slide-up overflow-hidden">
+                        <div className={`p-4 ${subject.color} bg-opacity-10 border-b border-gray-100 flex justify-between items-center`}>
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <span className={`p-2 rounded-lg ${subject.color} text-white`}>{subject.icon === 'Target' ? <Icons.Target /> : <Icons.Book />}</span>
+                                {subject.name}
+                            </h2>
+                            <button onClick={onClose}><Icons.Close /></button>
                         </div>
-                        
-                        <div className="flex flex-col lg:flex-row flex-wrap gap-4 w-full lg:w-auto lg:items-center">
-                            {/* Live Date Time Display */}
-                            <div className="text-left lg:text-right px-4 lg:border-r border-slate-200">
-                                <p className="text-sm font-black text-slate-700">{formattedDate}</p>
-                                <p className="text-xs font-bold text-blue-500 uppercase tracking-widest">{formattedTime}</p>
-                            </div>
 
-                            <div className="flex gap-2 w-full lg:w-auto">
-                                {/* WEEK FILTER UI */}
-                                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-xs font-black group">
-                                    <span className="text-slate-400 group-hover:text-blue-600 transition-colors">{Icons.Filter}</span>
-                                    <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-transparent outline-none uppercase font-black text-blue-600">
-                                        <option value="All">All Weeks</option>
-                                        {uniqueWeeks.map(w => <option key={w} value={w}>{w}</option>)}
-                                    </select>
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide">
+                            {!isAdmin && <div className="mb-4 bg-orange-50 border border-orange-200 text-orange-700 p-2 text-xs rounded text-center">🔒 View Only Mode (Login to Edit)</div>}
+                            
+                            <div className="mb-6 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                <h3 className="text-xs font-bold text-gray-400 uppercase mb-4">Analytics</h3>
+                                <ScoreChart history={subject.scoreHistory} targetScore={subject.targetScore} />
+                                <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div>
+                                        <label className="text-[10px] text-gray-400 font-bold">TARGET</label>
+                                        <input disabled={!isAdmin} type="number" value={subject.targetScore || ''} onChange={(e) => onUpdateTarget(subject.id, e.target.value)} className="w-full text-sm border rounded p-2" placeholder="0" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-400 font-bold">ADD SCORE</label>
+                                        <div className="flex gap-1">
+                                            <input disabled={!isAdmin} type="number" value={newScore} onChange={(e) => setNewScore(e.target.value)} className="w-full text-sm border rounded p-2" placeholder="0" />
+                                            <button disabled={!isAdmin} onClick={() => { if(newScore !== '') { onAddScore(subject.id, parseInt(newScore), newDate); setNewScore(''); }}} className="bg-gray-800 text-white rounded px-2 disabled:bg-gray-400"><Icons.Plus /></button>
+                                        </div>
+                                    </div>
                                 </div>
                                 
-                                {user.role === 'admin' && (
-                                    <button onClick={() => { 
-                                        setEditingId(null); 
-                                        setNewActivity({
-                                            date: new Date().toISOString().split('T')[0],
-                                            startDate: new Date().toISOString().split('T')[0],
-                                            category: 'Presale', task: '', note: '', customer: '', 
-                                            projectManager: '', priority: 'Medium', status: 'Proposal', value: 0, nextWeek: '', okr: 'Yes',
-                                            subCategory: 'Technical Consultancy' 
-                                        });
-                                        setShowModal(true); 
-                                    }} className="bg-blue-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow lg:flex-grow-0">
-                                        {Icons.Plus} Add
-                                    </button>
-                                )}
-                                <button onClick={() => window.dbService.signOut(window.dbService.auth)} className="bg-white border border-slate-200 text-slate-500 px-4 py-2.5 rounded-2xl text-xs font-black hover:bg-slate-50 uppercase flex items-center justify-center gap-2 flex-grow lg:flex-grow-0">
-                                    {Icons.LogOut}
-                                </button>
-                            </div>
-                        </div>
-                    </header>
-
-                    {/* KPI CARDS */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
-                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all">{Icons.Dollar}</div>
-                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Pipeline</p><h3 className="text-xl font-black">{kpis.presale.toFixed(1)}M</h3></div>
-                        </div>
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
-                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">{Icons.Target}</div>
-                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Win Rate</p><h3 className="text-xl font-black">{kpis.winRate}%</h3></div>
-                        </div>
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
-                            <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:bg-amber-600 group-hover:text-white transition-all">{Icons.Clock}</div>
-                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">BAU & Ops Hrs</p><h3 className="text-xl font-black">{kpis.bauAndOps}h</h3></div>
-                        </div>
-                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4 group transition-all">
-                            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl group-hover:bg-purple-600 group-hover:text-white transition-all">{Icons.Target}</div>
-                            <div><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">OKR Progress</p><h3 className="text-xl font-black">{kpis.okrRate}%</h3></div>
-                        </div>
-                    </div>
-
-                    {/* CHARTS */}
-                    {ResponsiveContainer && (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                                <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Weekly Performance Trend
-                                </h4>
-                                <div className="h-[250px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={chartData}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis dataKey="name" axisLine={false} tickLine={false} style={{fontSize: '10px', fontWeight: '900'}} />
-                                            <YAxis axisLine={false} tickLine={false} style={{fontSize: '10px'}} />
-                                            <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                                            <Legend iconType="circle" />
-                                            <Bar dataKey="presale" name="Presale (M)" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                                            <Bar dataKey="bau" name="BAU (Hrs)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                                            <Bar dataKey="opSupport" name="Op Support (Hrs)" fill="#14b8a6" radius={[6, 6, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                <div className="max-h-40 overflow-y-auto border-t border-gray-100 pt-2">
+                                    <table className="w-full text-xs">
+                                        <tbody>
+                                            {[...(subject.scoreHistory || [])].reverse().map((h, i) => (
+                                                <tr key={i} className="border-b border-gray-50">
+                                                    <td className="py-1 text-gray-500">{new Date(h.date).toLocaleDateString('th-TH')}</td>
+                                                    <td className="py-1 font-bold">{h.score}</td>
+                                                    <td className="py-1 text-right"><button disabled={!isAdmin} onClick={() => onDeleteScore(subject.id, (subject.scoreHistory.length - 1) - i)} className="text-red-300 hover:text-red-500 disabled:opacity-50"><Icons.Trash /></button></td>
+                                                </tr>
+                                            ))}
+                                            {(!subject.scoreHistory || subject.scoreHistory.length === 0) && (
+                                                <tr><td colSpan="3" className="text-center text-gray-400 py-4">No scores yet</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
-                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                                 <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest text-center">Status Distribution</h4>
-                                 <div className="h-[250px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie data={Object.entries(filteredData.reduce((acc, c) => ({...acc, [c.status]: (acc[c.status] || 0) + 1}), {})).map(([name, value]) => ({name, value}))} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                                {COLORS.map((color, index) => <Cell key={`cell-${index}`} fill={color} stroke="none" />)}
-                                            </Pie>
-                                            <Tooltip contentStyle={{borderRadius: '16px', border: 'none'}} />
-                                            <Legend verticalAlign="bottom" align="center" iconType="circle" />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                 </div>
+                            
+                            <div className="space-y-2">
+                                {subject.topics.map((topic, index) => (
+                                    <div key={index} className="flex items-center justify-between p-3 rounded-lg border bg-white border-gray-100">
+                                        <label className="flex items-center flex-1 cursor-pointer">
+                                            <input disabled={!isAdmin} type="checkbox" checked={topic.completed} onChange={() => onUpdateTopic(subject.id, index)} className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed" />
+                                            <span className={`ml-3 text-sm ${topic.completed ? 'text-gray-400 line-through' : ''}`}>{topic.name}</span>
+                                        </label>
+                                        <button disabled={!isAdmin} onClick={() => onToggleReview(subject.id, index)} className={`p-2 rounded-full ${topic.review ? 'text-yellow-500 bg-yellow-50' : 'text-gray-300'}`}><Icons.Flag /></button>
+                                    </div>
+                                ))}
                             </div>
-                        </div>
-                    )}
-
-                    {/* ACTIVITY LOG TABLE */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
-                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Activity Detail Log</h4>
-                            <button onClick={() => setShowDone(!showDone)} className="text-[10px] font-black text-blue-600 uppercase hover:underline">
-                                {showDone ? "Hide Done Tasks" : "Show All Tasks"}
-                            </button>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
-                                    <tr>
-                                        <th className="px-6 py-5">Week / Category / Task</th>
-                                        <th className="px-6 py-5 bg-blue-50/50">Activity Note (สัปดาห์นี้ทำอะไร)</th>
-                                        <th className="px-6 py-5">Project Manager</th>
-                                        <th className="px-6 py-5 text-center">Status</th>
-                                        <th className="px-6 py-5 text-right">Value (M)</th>
-                                        <th className="px-6 py-5 text-right">Hours (h)</th>
-                                        <th className="px-6 py-5 text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-sm divide-y divide-slate-100 bg-white">
-                                    {filteredData.map(row => (
-                                        <tr key={row.id} className="hover:bg-slate-50 group transition-all">
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="text-blue-500 font-black text-[10px] uppercase">{row.week}</span>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                                                        row.category === 'Presale' ? 'bg-blue-100 text-blue-700' : 
-                                                        row.category === 'BAU' ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'
-                                                    }`}>
-                                                        {row.category}
-                                                    </span>
-                                                </div>
-                                                <div className="font-black text-slate-800 text-base leading-tight">
-                                                    {row.task}
-                                                </div>
-                                                {row.category === 'Operational Support' && row.subCategory && (
-                                                    <div className="text-[10px] text-teal-600 font-bold mt-1">({row.subCategory})</div>
-                                                )}
-                                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-2 font-bold bg-slate-100 w-fit px-2 py-0.5 rounded">
-                                                    {Icons.Calendar} Start: {row.startDate || row.date}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 bg-blue-50/20 min-w-[320px] max-w-md">
-                                                <div className="text-[9px] text-blue-400 font-black mb-2 flex items-center gap-1 uppercase">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Log Date: {row.date}
-                                                </div>
-                                                <div className="text-slate-800 font-bold whitespace-pre-wrap italic text-xs leading-relaxed border-l-2 border-blue-200 pl-3">
-                                                    {row.note ? row.note : <span className="text-slate-300 font-normal">ไม่มีบันทึกรายละเอียดงาน</span>}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-2 text-slate-700 font-bold text-xs">
-                                                    <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-[10px] font-black uppercase">
-                                                        {(row.projectManager || 'N').charAt(0)}
-                                                    </div>
-                                                    {row.projectManager || '-'}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 text-center">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter shadow-sm ${['Won', 'Done'].includes(row.status) ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                                                    {row.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-5 text-right font-mono font-black text-blue-600 text-lg">
-                                                {row.category === 'Presale' ? `${Number(row.value || 0).toFixed(1)}M` : '-'}
-                                            </td>
-                                            <td className="px-6 py-5 text-right font-mono font-black text-amber-600 text-lg">
-                                                {['BAU', 'Operational Support'].includes(row.category) ? `${row.hours || 0}h` : '-'}
-                                            </td>
-                                            <td className="px-6 py-5 text-center">
-                                                <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {user.role === 'admin' && (
-                                                        <>
-                                                            <button onClick={() => handleEdit(row)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors">{Icons.Edit}</button>
-                                                            <button onClick={() => { if(confirm("Confirm delete?")) window.dbService.deleteDoc(window.dbService.doc(window.dbService.db, "tasks", row.id)); }} className="p-2 text-rose-600 hover:bg-rose-100 rounded-full transition-colors">{Icons.Trash}</button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
                         </div>
                     </div>
-
-                    {/* FORM MODAL */}
-                    {showModal && (
-                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 modal-overlay overflow-y-auto">
-                            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg modal-content border border-slate-100 text-left">
-                                <div className="p-8 border-b flex justify-between items-center bg-slate-50 rounded-t-[2rem]">
-                                    <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">{editingId ? 'แก้ไขข้อมูล' : 'บันทึกกิจกรรมใหม่'}</h3>
-                                    <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all">{Icons.X}</button>
-                                </div>
-                                <form onSubmit={handleAddSubmit} className="p-8 space-y-5 max-h-[75vh] overflow-y-auto">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่บันทึก (LOG)</label>
-                                            <input type="date" required className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.date} onChange={e => setNewActivity({...newActivity, date: e.target.value})} />
-                                        </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่เริ่มโครงการ</label>
-                                            <input type="date" className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ประเภทงาน (Category)</label>
-                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none bg-slate-50" value={newActivity.category} onChange={handleCategoryChange}>
-                                                <option value="Presale">Presale</option>
-                                                <option value="BAU">BAU</option>
-                                                <option value="Operational Support">Operational Support</option>
-                                            </select>
-                                        </div>
-                                        
-                                        {/* Dynamic Sub-Category for Operational Support */}
-                                        {newActivity.category === 'Operational Support' && (
-                                            <div><label className="text-[10px] font-black text-teal-500 uppercase mb-2 block ml-1">หมวดย่อย (Sub-Category)</label>
-                                                <select className="w-full border border-teal-200 p-3 rounded-2xl text-sm outline-none bg-teal-50 text-teal-800 font-bold" value={newActivity.subCategory} onChange={e => setNewActivity({...newActivity, subCategory: e.target.value})}>
-                                                    <option value="Technical Consultancy">Technical Consultancy</option>
-                                                    <option value="Provisioning">Provisioning</option>
-                                                </select>
-                                            </div>
-                                        )}
-
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ชื่อโครงการ / Task</label>
-                                            <input type="text" required placeholder="ชื่อโครงการ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
-                                        </div>
-                                    </div>
-
-                                    <div><label className="text-[10px] font-black text-blue-600 uppercase mb-2 block ml-1 underline tracking-wider">รายละเอียดสิ่งที่ทำในสัปดาห์นี้</label>
-                                        <textarea required rows="4" className="w-full border border-blue-100 p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30 font-bold placeholder-blue-300" 
-                                            value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="ระบุสิ่งที่ทำลงไปในสัปดาห์นี้..."></textarea>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ลูกค้า (Customer)</label>
-                                            <input type="text" placeholder="ชื่อบริษัทลูกค้า..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.customer} onChange={e => setNewActivity({...newActivity, customer: e.target.value})} />
-                                        </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Project Manager</label>
-                                            <input type="text" placeholder="ชื่อผู้รับผิดชอบ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.projectManager} onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})} />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">สถานะ</label>
-                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.status} onChange={e => setNewActivity({...newActivity, status: e.target.value})}>
-                                                {newActivity.category === 'Presale' ? <><option value="Lead">Lead</option><option value="Proposal">Proposal</option><option value="Bit">Bit</option><option value="Won">Won</option><option value="Lost">Lost</option></> : <><option value="In Progress">In Progress</option><option value="Done">Done</option><option value="Pending">Pending</option></>}
-                                            </select>
-                                        </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">OKR</label>
-                                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm" value={newActivity.okr} onChange={e => setNewActivity({...newActivity, okr: e.target.value})}><option value="Yes">Yes</option><option value="No">No</option></select>
-                                        </div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">{newActivity.category === 'Presale' ? 'Val (M)' : 'Hours'}</label>
-                                            <input type="number" step="any" className="w-full border border-slate-200 p-3 rounded-2xl text-sm font-black text-blue-600" value={newActivity.value} onChange={e => setNewActivity({...newActivity, value: e.target.value})} />
-                                        </div>
-                                    </div>
-                                    <div><label className="text-[10px] font-black text-indigo-600 uppercase mb-2 block ml-1">แผนงานสัปดาห์หน้า (Next Step)</label>
-                                        <input type="text" placeholder="แผนงานขั้นต่อไป..." className="w-full border border-indigo-100 p-3 rounded-2xl text-sm bg-indigo-50/50" value={newActivity.nextWeek} onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})} />
-                                    </div>
-                                    <div className="flex justify-end gap-4 pt-6 border-t border-slate-100">
-                                        <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">ยกเลิก</button>
-                                        <button type="submit" className="px-12 py-4 bg-blue-600 text-white rounded-[1.25rem] text-xs font-black shadow-xl shadow-blue-100 uppercase tracking-widest hover:scale-105 transition-all">บันทึกข้อมูล</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
 
-        // --- Reliability Bootstrapper ---
-        function runDashboard() {
-            const check = () => {
-                const isReady = window.dbService && window.dbService.status === 'ready' && !!window.ReactDOM && !!window.Recharts;
-                if (isReady) {
-                    const rootEl = document.getElementById('root');
-                    if (rootEl) {
-                        const root = ReactDOM.createRoot(rootEl);
-                        root.render(<App />);
-                        console.log("Dashboard Started Successfully");
+        const PinModal = ({ onSubmit, onClose, mode = 'login' }) => {
+            const [pin, setPin] = React.useState('');
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-xs text-center slide-up">
+                        <div className="mb-4 text-indigo-600 flex justify-center"><Icons.Lock /></div>
+                        <h3 className="text-lg font-bold mb-2">{mode === 'create' ? 'ตั้งรหัส PIN ใหม่' : 'ใส่รหัส PIN เพื่อแก้ไข'}</h3>
+                        <p className="text-xs text-gray-400 mb-4">{mode === 'create' ? 'กรุณาจำรหัสนี้ให้ดี เพื่อใช้แก้ไขข้อมูล' : 'กรอกรหัส 4 หลักเพื่อปลดล็อค'}</p>
+                        <input type="tel" maxLength="4" value={pin} onChange={(e) => setPin(e.target.value)} className="w-full text-center text-2xl tracking-[1em] font-bold p-3 border rounded-xl mb-4 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="••••" />
+                        <div className="flex gap-2">
+                            {mode === 'login' && <button onClick={onClose} className="flex-1 py-2 text-gray-500 bg-gray-100 rounded-lg">ยกเลิก</button>}
+                            <button onClick={() => onSubmit(pin)} className="flex-1 py-2 text-white bg-indigo-600 rounded-lg font-bold shadow-lg hover:bg-indigo-700">ยืนยัน</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Dek71App = () => {
+            const [subjects, setSubjects] = React.useState([]);
+            const [adminPin, setAdminPin] = React.useState(null); // Null = not set yet
+            const [isAdmin, setIsAdmin] = React.useState(false); // False = View Only
+            const [showPinModal, setShowPinModal] = React.useState(false); // 'login' or 'create' or false
+            
+            const [selectedSubject, setSelectedSubject] = React.useState(null);
+            const [status, setStatus] = React.useState('connecting'); 
+            const [errorMsg, setErrorMsg] = React.useState('');
+            const [examDateStr, setExamDateStr] = React.useState('2028-03-15');
+            const [timeLeft, setTimeLeft] = React.useState({ days: 0, hours: 0 });
+            const [isEditingDate, setIsEditingDate] = React.useState(false);
+
+            const createInitialData = () => [
+                { id: 'tpat1', name: 'TPAT1', weight: 30, color: 'bg-orange-500', icon: 'Brain', targetScore: 200 },
+                { id: 'math1', name: 'คณิต 1', weight: 14, color: 'bg-blue-600', icon: 'Target', targetScore: 50 },
+                { id: 'phy', name: 'ฟิสิกส์', weight: 9.33, color: 'bg-indigo-500', icon: 'Book', targetScore: 45 },
+                { id: 'chem', name: 'เคมี', weight: 9.33, color: 'bg-teal-500', icon: 'Book', targetScore: 50 },
+                { id: 'bio', name: 'ชีววิทยา', weight: 9.33, color: 'bg-green-500', icon: 'Book', targetScore: 60 },
+                { id: 'eng', name: 'อังกฤษ', weight: 14, color: 'bg-purple-600', icon: 'Book', targetScore: 70 },
+                { id: 'thai', name: 'ภาษาไทย', weight: 7, color: 'bg-pink-500', icon: 'Book', targetScore: 70 },
+                { id: 'soc', name: 'สังคม', weight: 7, color: 'bg-yellow-500', icon: 'Book', targetScore: 60 },
+            ].map(sub => ({ 
+                ...sub, 
+                progress: 0, 
+                scoreHistory: [],
+                topics: MASTER_CURRICULUM[sub.id] ? MASTER_CURRICULUM[sub.id].map(t => ({ name: t, completed: false, review: false })) : [] 
+            }));
+
+            React.useEffect(() => {
+                if (!db) return setStatus('error');
+                const docRef = db.collection('dek71_data').doc('user_data');
+
+                const unsubscribe = docRef.onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        // Migration Check: Ensure scoreHistory exists
+                        const migratedData = (data.subjects || []).map(s => ({
+                            ...s,
+                            scoreHistory: Array.isArray(s.scoreHistory) ? s.scoreHistory : (s.score ? [{date: new Date().toISOString(), score: s.score}] : [])
+                        }));
+                        setSubjects(migratedData);
+                        
+                        if (data.settings && data.settings.pin) {
+                            setAdminPin(data.settings.pin);
+                        } else {
+                            setAdminPin(null); // Prompt to create
+                            setShowPinModal('create');
+                        }
+
+                        if (data.examDate) {
+                            setExamDateStr(data.examDate);
+                        }
+                    } else {
+                        const initialData = createInitialData();
+                        docRef.set({ subjects: initialData, settings: { pin: null }, examDate: '2028-03-15' });
+                        setSubjects(initialData);
+                        setShowPinModal('create');
                     }
-                } else {
-                    setTimeout(check, 100);
+                    setStatus('online');
+                }, (err) => {
+                    console.error(err);
+                    setStatus('error');
+                    if (err.code === 'permission-denied') setErrorMsg('สิทธิ์ไม่ผ่าน (ปรับ Rules เป็น True)');
+                    else setErrorMsg(err.message);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            // Timer Logic
+            React.useEffect(() => {
+                const timer = setInterval(() => {
+                    const diff = new Date(examDateStr + 'T00:00:00') - new Date();
+                    setTimeLeft({ days: Math.floor(diff / (86400000)), hours: Math.floor((diff / 3600000) % 24) });
+                }, 1000);
+                return () => clearInterval(timer);
+            }, [examDateStr]);
+
+            const handlePinSubmit = (inputPin) => {
+                if (showPinModal === 'create') {
+                    if (inputPin.length < 4) return alert("PIN ต้องมี 4 หลัก");
+                    db.collection('dek71_data').doc('user_data').set({ settings: { pin: inputPin } }, { merge: true });
+                    setAdminPin(inputPin);
+                    setIsAdmin(true);
+                    setShowPinModal(false);
+                } else if (showPinModal === 'login') {
+                    if (inputPin === adminPin) {
+                        setIsAdmin(true);
+                        setShowPinModal(false);
+                    } else {
+                        alert("รหัสผิด (Wrong PIN)");
+                    }
                 }
             };
-            check();
-        }
-        window.addEventListener('load', runDashboard);
+
+            const saveData = (newSubjects) => {
+                setSubjects(newSubjects);
+                setStatus('syncing');
+                if (!db) return;
+                db.collection('dek71_data').doc('user_data').update({ subjects: newSubjects })
+                    .then(() => setStatus('online'))
+                    .catch((err) => setStatus('error'));
+            };
+
+            const updateSubject = (id, fn) => {
+                if (!isAdmin) return; // Guard
+                const newSubjects = subjects.map(s => s.id === id ? fn(s) : s);
+                saveData(newSubjects);
+                if(selectedSubject?.id === id) setSelectedSubject(newSubjects.find(s => s.id === id));
+            };
+
+            const getTotalReadiness = () => subjects.length ? subjects.reduce((acc, sub) => acc + (sub.progress * sub.weight / 100), 0) : 0;
+            const reviewQueue = subjects.flatMap(s => s.topics.filter(t => t.review).map(t => ({...t, subject: s.name, color: s.color})));
+
+            return (
+                <div className="max-w-4xl mx-auto p-4 md:p-6 min-h-screen pb-20">
+                    <header className="mb-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <span className="bg-indigo-600 text-white p-1.5 rounded-lg"><Icons.Target /></span> Dek71
+                            </h1>
+                            <div className="flex items-center gap-3">
+                                {/* LOCK TOGGLE */}
+                                <button 
+                                    onClick={() => isAdmin ? setIsAdmin(false) : setShowPinModal('login')} 
+                                    className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all ${isAdmin ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
+                                >
+                                    {isAdmin ? <><Icons.Unlock /> Admin Mode</> : <><Icons.Lock /> View Only</>}
+                                </button>
+                                
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-green-500' : (status === 'syncing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500')}`}></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {errorMsg && <div className="bg-red-50 text-red-600 p-2 text-xs rounded mb-4 border border-red-200">{errorMsg}</div>}
+
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm relative group">
+                                <div className="text-xs text-gray-400 font-bold uppercase">Countdown</div>
+                                <div className="text-lg font-bold text-indigo-600">{timeLeft.days} วัน</div>
+                                {isEditingDate && isAdmin ? (
+                                    <input 
+                                        type="date" 
+                                        value={examDateStr} 
+                                        onChange={(e) => { 
+                                            const newDate = e.target.value;
+                                            setExamDateStr(newDate); 
+                                            if(db) db.collection('dek71_data').doc('user_data').update({ examDate: newDate });
+                                            setIsEditingDate(false);
+                                        }} 
+                                        className="text-xs w-full mt-1 border rounded p-1" 
+                                        autoFocus
+                                        onBlur={() => setIsEditingDate(false)}
+                                    />
+                                ) : (
+                                    <div 
+                                        onClick={() => isAdmin && setIsEditingDate(true)} 
+                                        className={`text-[10px] text-gray-400 mt-1 flex items-center gap-1 ${isAdmin ? 'cursor-pointer hover:text-indigo-500' : 'cursor-default'}`}
+                                    >
+                                        Target: {new Date(examDateStr).toLocaleDateString('th-TH')} 
+                                        {isAdmin && <Icons.Edit />}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-3 rounded-xl text-white shadow-lg relative overflow-hidden">
+                                <div className="relative z-10">
+                                    <div className="text-xs opacity-80">Readiness</div>
+                                    <div className="text-2xl font-bold">{getTotalReadiness().toFixed(1)}%</div>
+                                    <div className="w-full bg-white/20 h-1 mt-2 rounded-full"><div className="bg-white h-1 rounded-full" style={{width: `${getTotalReadiness()}%`}}></div></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {reviewQueue.length > 0 && (
+                            <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-4 mb-4">
+                                <h3 className="text-sm font-bold text-yellow-800 flex items-center gap-2 mb-2">
+                                    <Icons.Flag /> ต้องทบทวนด่วน ({reviewQueue.length})
+                                </h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {reviewQueue.slice(0, 3).map((item, i) => <span key={i} className="text-xs bg-white border border-yellow-200 text-yellow-700 px-2 py-1 rounded shadow-sm">{item.subject}: {item.name.substring(0, 15)}...</span>)}
+                                </div>
+                            </div>
+                        )}
+                    </header>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {subjects.map(sub => {
+                            const score = sub.scoreHistory && sub.scoreHistory.length > 0 ? sub.scoreHistory[sub.scoreHistory.length-1].score : 0;
+                            const reviewCount = sub.topics.filter(t => t.review).length;
+                            return (
+                                <div key={sub.id} onClick={() => setSelectedSubject(sub)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 active:scale-[0.98] transition-transform relative overflow-hidden">
+                                    <div className={`absolute bottom-0 left-0 h-1 ${sub.color}`} style={{ width: `${sub.progress}%` }}></div>
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${sub.color} bg-opacity-10 text-gray-700 relative`}>
+                                                {sub.icon === 'Target' ? <Icons.Target /> : <Icons.Book />}
+                                                {reviewCount > 0 && <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full border-2 border-white"></div>}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                                    {sub.name}
+                                                </h3>
+                                                <div className="text-xs text-gray-400">Score: {score > 0 ? score : '-'} / {sub.targetScore}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-xl font-bold text-gray-800">{sub.progress}%</div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {selectedSubject && (
+                        <SubjectModal 
+                            subject={selectedSubject} 
+                            isAdmin={isAdmin}
+                            onClose={() => setSelectedSubject(null)} 
+                            onUpdateTopic={(id, i) => updateSubject(id, s => { 
+                                const t = [...s.topics]; 
+                                t[i].completed = !t[i].completed; 
+                                return { ...s, topics: t, progress: Math.round((t.filter(x=>x.completed).length / t.length)*100) }; 
+                            })}
+                            onToggleReview={(id, i) => updateSubject(id, s => { const t = [...s.topics]; t[i].review = !t[i].review; return { ...s, topics: t }; })} 
+                            onAddScore={(id, sc, d) => updateSubject(id, s => ({ ...s, scoreHistory: [...(s.scoreHistory || []), {score: sc, date: d}] }))} 
+                            onDeleteScore={(id, i) => updateSubject(id, s => { const h = [...(s.scoreHistory || [])]; h.splice(i, 1); return { ...s, scoreHistory: h }; })}
+                            onUpdateTarget={(id, v) => updateSubject(id, s => ({ ...s, targetScore: parseInt(v)||0 }))} 
+                        />
+                    )}
+
+                    {showPinModal && <PinModal mode={showPinModal} onSubmit={handlePinSubmit} onClose={() => setShowPinModal(false)} />}
+                    
+                    <div className="text-center text-[10px] text-gray-300 mt-8">v3.2 Security Enabled</div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Dek71App />);
     </script>
 </body>
 </html>
