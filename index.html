@@ -1,712 +1,802 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  PieChart, Pie, Cell 
-} from 'recharts';
-import { 
-  TrendingUp, Clock, Filter, DollarSign, Target, User, Eye, EyeOff, UserCheck, 
-  Plus, LogOut, X, Edit, Trash, Calendar, Download 
-} from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presale & BAU Performance Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- Prop Types -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+    
+    <!-- Recharts -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.3/Recharts.min.js"></script>
+    
+    <!-- Babel -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
 
-// --- Firebase Configuration ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCxcwdUQlVewO2C0fyCXhVYCk7adOlb7Bw",
-  authDomain: "sareport-9a853.firebaseapp.com",
-  projectId: "sareport-9a853",
-  storageBucket: "sareport-9a853.firebasestorage.app",
-  messagingSenderId: "420538767390",
-  appId: "1:420538767390:web:3b07cb2bd418b84da0360f",
-  measurementId: "G-HT4N05EQQE"
-};
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-// --- Helper Functions ---
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
-
-const getWeekNumber = (dateStr) => {
-  const date = new Date(dateStr);
-  const onejan = new Date(date.getFullYear(), 0, 1);
-  const week = Math.ceil((((date - onejan) / 86400000) + onejan.getDay() + 1) / 7);
-  return `W${week.toString().padStart(2, '0')}`;
-};
-
-// --- Login Component ---
-const LoginScreen = ({ onLogin, error, loading }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onLogin(email, password);
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 text-left font-sans">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md space-y-4">
-        <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">Dashboard Login</h2>
-        <input 
-          type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required 
-          className="w-full border border-slate-200 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" 
-        />
-        <input 
-          type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required 
-          className="w-full border border-slate-200 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" 
-        />
-        {error && <p className="text-rose-500 text-xs font-bold text-center bg-rose-50 p-3 rounded-xl border border-rose-100">{error}</p>}
-        <button 
-          type="submit" disabled={loading}
-          className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-widest disabled:opacity-50"
-        >
-          {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
-        </button>
-      </form>
-    </div>
-  );
-};
-
-// --- Main App Component ---
-const App = () => {
-  // Application State
-  const [user, setUser] = useState(null);
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  // UI & Filter State
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [showDone, setShowDone] = useState(false); // Default hide 'Done'
-  const [selectedWeek, setSelectedWeek] = useState('All');
-  const [activeKpiFilter, setActiveKpiFilter] = useState('All'); // 'All', 'Pipeline', 'WinRate', 'BAU', 'OKR'
-
-  // Form State
-  const [newActivity, setNewActivity] = useState({
-    date: new Date().toISOString().split('T')[0],
-    startDate: new Date().toISOString().split('T')[0],
-    category: 'Presale', task: '', note: '', customer: '', 
-    projectManager: '', status: 'Proposal', value: 0, hours: 0, nextWeek: '', okr: 'Yes',
-    subCategory: 'Technical Consultancy' 
-  });
-
-  // Effects
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-      if (fbUser) {
-        const email = fbUser.email.toLowerCase();
-        const isAdmin = email.includes('admin') || email === 'panuwatk@gmail.com';
-        setUser({ email: fbUser.email, role: isAdmin ? 'admin' : 'viewer' });
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "tasks"), orderBy("date", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => {
-        const d = doc.data();
-        return { 
-          id: doc.id, 
-          ...d,
-          note: d.note || d.activityNote || d.activity || "" 
+        const firebaseConfig = {
+            apiKey: "AIzaSyCxcwdUQlVewO2C0fyCXhVYCk7adOlb7Bw",
+            authDomain: "sareport-9a853.firebaseapp.com",
+            projectId: "sareport-9a853",
+            storageBucket: "sareport-9a853.firebasestorage.app",
+            messagingSenderId: "420538767390",
+            appId: "1:420538767390:web:3b07cb2bd418b84da0360f",
+            measurementId: "G-HT4N05EQQE"
         };
-      });
-      setData(docs);
-    }, (error) => {
-      console.error("Firestore Error:", error);
-    });
-    return () => unsubscribe();
-  }, [user]);
 
-  // Handlers
-  const handleLogin = async (email, password) => {
-    setIsLoggingIn(true);
-    setAuthError('');
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-    } catch (err) {
-      setAuthError("ล็อกอินไม่สำเร็จ กรุณาตรวจสอบอีเมลและรหัสผ่าน");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleLogout = () => {
-    signOut(auth);
-  };
-
-  const handleCategoryChange = (e) => {
-    const newCat = e.target.value;
-    let defaultStatus = 'In Progress'; 
-    if (newCat === 'Presale') defaultStatus = 'Proposal';
-    
-    setNewActivity({
-      ...newActivity, 
-      category: newCat, 
-      status: defaultStatus,
-      subCategory: newCat === 'Operational Support' ? 'Technical Consultancy' : ''
-    });
-  };
-
-  const handleEdit = (item) => {
-    setEditingId(item.id);
-    setNewActivity({
-      date: item.date || "",
-      startDate: item.startDate || item.date || "",
-      category: item.category || "Presale",
-      subCategory: item.subCategory || "Technical Consultancy",
-      task: item.task || "",
-      note: item.note || "",
-      customer: item.customer || "",
-      projectManager: item.projectManager || "",
-      status: item.status || "Proposal",
-      value: item.value || 0,
-      hours: item.hours || 0,
-      nextWeek: item.nextWeek || "",
-      okr: item.okr || "Yes"
-    });
-    setShowModal(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Confirm delete?")) return;
-    try {
-      await deleteDoc(doc(db, "tasks", id));
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const handleAddSubmit = async (e) => {
-    e.preventDefault();
-    const isOpSupport = newActivity.category === 'Operational Support';
-    
-    const payload = {
-      date: newActivity.date,
-      startDate: newActivity.startDate,
-      category: newActivity.category,
-      subCategory: isOpSupport ? newActivity.subCategory : '',
-      task: newActivity.task,
-      note: newActivity.note.trim(),
-      customer: newActivity.customer,
-      projectManager: newActivity.projectManager,
-      status: newActivity.status,
-      nextWeek: newActivity.nextWeek.trim(),
-      okr: newActivity.okr,
-      week: getWeekNumber(newActivity.date),
-      hours: Number(newActivity.hours) || 0,
-      value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
-      updatedAt: new Date().toISOString()
-    };
-
-    try {
-      if (editingId) {
-        await updateDoc(doc(db, "tasks", editingId), payload);
-      } else {
-        await addDoc(collection(db, "tasks"), payload);
-      }
-      setShowModal(false);
-    } catch (err) {
-      alert("Error saving data: " + err.message);
-    }
-  };
-
-  // Processed Data
-  const uniqueWeeks = useMemo(() => [...new Set(data.map(d => d.week))].filter(Boolean).sort(), [data]);
-
-  // 1. Base Filter (Filters out weeks/done tasks globally)
-  const baseFilteredData = useMemo(() => {
-    return data.filter(item => {
-      const weekMatch = selectedWeek === 'All' || item.week === selectedWeek;
-      const statusMatch = showDone ? true : item.status !== 'Done';
-      return weekMatch && statusMatch;
-    });
-  }, [data, selectedWeek, showDone]);
-
-  // 2. Display Data (Filtered additionally by KPI clicks for the table)
-  const displayData = useMemo(() => {
-    if (activeKpiFilter === 'Pipeline') return baseFilteredData.filter(d => d.category === 'Presale');
-    if (activeKpiFilter === 'WinRate') return baseFilteredData.filter(d => d.category === 'Presale' && d.status === 'Won');
-    if (activeKpiFilter === 'BAU') return baseFilteredData.filter(d => ['BAU', 'Operational Support'].includes(d.category));
-    if (activeKpiFilter === 'OKR') return baseFilteredData.filter(d => d.okr === 'Yes');
-    return baseFilteredData;
-  }, [baseFilteredData, activeKpiFilter]);
-
-  // KPIs
-  const kpis = useMemo(() => {
-    const presale = baseFilteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0);
-    const bauAndOps = baseFilteredData.reduce((acc, curr) => acc + (['BAU', 'Operational Support'].includes(curr.category) ? Number(curr.hours || 0) : 0), 0);
-    const winItems = baseFilteredData.filter(d => d.category === 'Presale');
-    const winRate = winItems.length ? Math.round((winItems.filter(d => d.status === 'Won').length / winItems.length) * 100) : 0;
-    const okrRate = baseFilteredData.length ? Math.round((baseFilteredData.filter(d => d.okr === 'Yes').length / baseFilteredData.length) * 100) : 0;
-    return { presale, bauAndOps, winRate, okrRate };
-  }, [baseFilteredData]);
-
-  // Charts Data
-  const chartData = useMemo(() => {
-    const weeks = [...new Set(data.map(d => d.week))].sort().slice(-6);
-    return weeks.map(w => {
-      const items = baseFilteredData.filter(d => d.week === w);
-      return {
-        name: w,
-        presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0) / 1000000,
-        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0),
-        opSupport: items.reduce((acc, curr) => acc + (curr.category === 'Operational Support' ? Number(curr.hours || 0) : 0), 0)
-      };
-    });
-  }, [data, baseFilteredData]);
-
-  const statusData = useMemo(() => {
-    return Object.entries(
-      baseFilteredData.reduce((acc, c) => ({...acc, [c.status]: (acc[c.status] || 0) + 1}), {})
-    ).map(([name, value]) => ({name, value}));
-  }, [baseFilteredData]);
-
-  // Export to CSV Function
-  const exportToCSV = () => {
-    const headers = [
-      "Week", "Category", "Sub-Category", "Task/Project", "Date",
-      "Customer", "Owner", "Project Manager", "Status", "OKR",
-      "Value (THB)", "Hours", "Next Week Plan", "Note"
-    ];
-
-    const csvContent = [
-      headers.join(","),
-      ...displayData.map(row => [
-        row.week,
-        row.category,
-        row.subCategory || "-",
-        `"${(row.task || "").replace(/"/g, '""')}"`,
-        row.date,
-        `"${(row.customer || "").replace(/"/g, '""')}"`,
-        row.owner || "-",
-        row.projectManager || "-",
-        row.status,
-        row.okr || "-",
-        row.value || 0,
-        row.hours || 0,
-        `"${(row.nextWeek || "").replace(/"/g, '""')}"`,
-        `"${(row.note || "").replace(/"/g, '""')}"`
-      ].join(","))
-    ].join("\n");
-
-    // Add BOM for UTF-8 support in Excel (Thai language support)
-    const bom = "\uFEFF";
-    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `SA_Performance_Export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50 font-sans">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-      </div>
-    );
-  }
-
-  if (!user) return <LoginScreen onLogin={handleLogin} error={authError} loading={isLoggingIn} />;
-
-  // Date Formatting
-  const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-  const formattedDate = currentTime.toLocaleDateString('en-US', dateOptions);
-  const formattedTime = currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-  return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen font-sans">
-      
-      {/* Header */}
-      <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">
-            Presale &amp; BAU Performance
-          </h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{user.email}</span>
-            <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">{user.role}</span>
-          </div>
-        </div>
-        
-        <div className="flex flex-col lg:flex-row flex-wrap gap-4 w-full xl:w-auto xl:items-center">
-          {/* Live Date Time Display */}
-          <div className="text-left lg:text-right px-4 lg:border-r border-slate-200">
-            <p className="text-sm font-black text-slate-700">{formattedDate}</p>
-            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest">{formattedTime}</p>
-          </div>
-
-          <div className="flex flex-wrap gap-3 items-center w-full lg:w-auto">
-            <button 
-              onClick={() => setShowDone(!showDone)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black transition-colors uppercase tracking-widest ${
-                  showDone ? 'bg-slate-200 text-slate-700' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {showDone ? <Eye size={16} /> : <EyeOff size={16} />}
-              {showDone ? 'Showing Done' : 'Hiding Done'}
-            </button>
-
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-[10px] font-black group">
-              <span className="text-slate-400 group-hover:text-blue-600 transition-colors"><Filter size={16} /></span>
-              <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-transparent outline-none uppercase font-black text-blue-600 cursor-pointer">
-                <option value="All">All Weeks</option>
-                {uniqueWeeks.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
-            </div>
+        try {
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            const auth = getAuth(app);
             
-            <button 
-              onClick={exportToCSV}
-              className="bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow sm:flex-grow-0"
-            >
-              <Download size={16} /> Export
-            </button>
-            
-            {user.role === 'admin' && (
-              <button 
-                onClick={() => { 
-                  setEditingId(null); 
-                  setNewActivity({
-                    date: new Date().toISOString().split('T')[0],
-                    startDate: new Date().toISOString().split('T')[0],
-                    category: 'Presale', task: '', note: '', customer: '', 
-                    projectManager: '', status: 'Proposal', value: 0, hours: 0, nextWeek: '', okr: 'Yes',
-                    subCategory: 'Technical Consultancy' 
-                  });
-                  setShowModal(true); 
-                }} 
-                className="bg-blue-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow sm:flex-grow-0"
-              >
-                <Plus size={16} /> Add
-              </button>
-            )}
-            <button 
-              onClick={handleLogout} 
-              className="bg-white border border-slate-200 text-slate-500 px-4 py-2.5 rounded-2xl text-[10px] font-black hover:bg-slate-50 uppercase flex items-center justify-center gap-2 flex-grow sm:flex-grow-0"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        </div>
-      </header>
+            window.dbService = {
+                db, auth,
+                addDoc, updateDoc, deleteDoc, doc, collection, onSnapshot, query, orderBy,
+                signInWithEmailAndPassword, signOut, onAuthStateChanged,
+                status: 'ready'
+            };
+        } catch (e) {
+            console.error("Firebase error:", e);
+        }
+    </script>
 
-      {/* KPI CARDS (Interactive) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div 
-          onClick={() => setActiveKpiFilter(activeKpiFilter === 'Pipeline' ? 'All' : 'Pipeline')}
-          className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
-            activeKpiFilter === 'Pipeline' ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50/50' : 'border-slate-200'
-          }`}
-        >
-          <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'Pipeline' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}>
-            <DollarSign size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Active Pipeline</p>
-            <h3 className="text-xl font-black">{(kpis.presale / 1000000).toFixed(2)}M</h3>
-          </div>
-        </div>
-        
-        <div 
-          onClick={() => setActiveKpiFilter(activeKpiFilter === 'WinRate' ? 'All' : 'WinRate')}
-          className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
-            activeKpiFilter === 'WinRate' ? 'border-emerald-500 ring-2 ring-emerald-200 bg-emerald-50/50' : 'border-slate-200'
-          }`}
-        >
-          <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'WinRate' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'}`}>
-            <TrendingUp size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Win Rate</p>
-            <h3 className="text-xl font-black">{kpis.winRate}%</h3>
-          </div>
-        </div>
-
-        <div 
-          onClick={() => setActiveKpiFilter(activeKpiFilter === 'BAU' ? 'All' : 'BAU')}
-          className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
-            activeKpiFilter === 'BAU' ? 'border-amber-500 ring-2 ring-amber-200 bg-amber-50/50' : 'border-slate-200'
-          }`}
-        >
-          <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'BAU' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-600'}`}>
-            <Clock size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">BAU & Ops Hrs</p>
-            <h3 className="text-xl font-black">{kpis.bauAndOps}h</h3>
-          </div>
-        </div>
-
-        <div 
-          onClick={() => setActiveKpiFilter(activeKpiFilter === 'OKR' ? 'All' : 'OKR')}
-          className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
-            activeKpiFilter === 'OKR' ? 'border-purple-500 ring-2 ring-purple-200 bg-purple-50/50' : 'border-slate-200'
-          }`}
-        >
-          <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'OKR' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-600'}`}>
-            <Target size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">OKR Progress</p>
-            <h3 className="text-xl font-black">{kpis.okrRate}%</h3>
-          </div>
-        </div>
-      </div>
-
-      {/* CHARTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-            <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Weekly Performance Trend
-            </h4>
-            <div className="h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} style={{fontSize: '10px', fontWeight: '900'}} />
-                        <YAxis axisLine={false} tickLine={false} style={{fontSize: '10px'}} />
-                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                        <Legend iconType="circle" />
-                        <Bar dataKey="presale" name="Presale (M THB)" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                        <Bar dataKey="bau" name="BAU (Hrs)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                        <Bar dataKey="opSupport" name="Op Support (Hrs)" fill="#14b8a6" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; }
+        .modal-overlay { animation: fadeIn 0.2s ease-out; }
+        .modal-content { animation: slideUp 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root">
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">กำลังเตรียมหน้าจอ Dashboard...</p>
             </div>
         </div>
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-              <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest text-center">Status Distribution</h4>
-              <div className="h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie data={statusData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                            {statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />)}
-                        </Pie>
-                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none'}} />
-                        <Legend verticalAlign="bottom" align="center" iconType="circle" />
-                    </PieChart>
-                </ResponsiveContainer>
-              </div>
-        </div>
-      </div>
+    </div>
 
-      {/* ACTIVITY LOG TABLE */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 bg-slate-50 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-3">
-              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Activity Detail Log</h4>
-              {activeKpiFilter !== 'All' && (
-                <span 
-                  className="text-[10px] px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-indigo-200 transition-colors" 
-                  onClick={() => setActiveKpiFilter('All')}
-                >
-                  Filtered by: {activeKpiFilter} <span className="ml-1 text-indigo-400 text-sm leading-none">×</span>
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">
-              Showing {displayData.length} items
-            </div>
-        </div>
-        <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest border-b border-slate-100">
-                    <tr>
-                        <th className="px-6 py-5">Week / Category / Task</th>
-                        <th className="px-6 py-5 bg-blue-50/50">Activity Note (สัปดาห์นี้ทำอะไร)</th>
-                        <th className="px-6 py-5">Project Manager</th>
-                        <th className="px-6 py-5 text-center">Status</th>
-                        <th className="px-6 py-5 text-right">Value (M)</th>
-                        <th className="px-6 py-5 text-right">Hours (h)</th>
-                        <th className="px-6 py-5 text-center">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="text-sm divide-y divide-slate-100 bg-white">
-                    {displayData.map(row => (
-                        <tr key={row.id} className="hover:bg-slate-50 group transition-all">
-                            <td className="px-6 py-5">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-blue-500 font-black text-[10px] uppercase">{row.week}</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                                        row.category === 'Presale' ? 'bg-blue-100 text-blue-700' : 
-                                        row.category === 'BAU' ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'
-                                    }`}>
-                                        {row.category}
-                                    </span>
-                                </div>
-                                <div className="font-black text-slate-800 text-base leading-tight">
-                                    {row.task}
-                                </div>
-                                {row.category === 'Operational Support' && row.subCategory && (
-                                    <div className="text-[10px] text-teal-600 font-bold mt-1">({row.subCategory})</div>
-                                )}
-                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-2 font-bold bg-slate-100 w-fit px-2 py-0.5 rounded">
-                                    <Calendar size={12} /> Start: {row.startDate || row.date}
-                                </div>
-                            </td>
-                            <td className="px-6 py-5 bg-blue-50/20 min-w-[320px] max-w-md">
-                                <div className="text-[9px] text-blue-400 font-black mb-2 flex items-center gap-1 uppercase">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Log Date: {row.date}
-                                </div>
-                                <div className="text-slate-800 font-bold whitespace-pre-wrap italic text-xs leading-relaxed border-l-2 border-blue-200 pl-3">
-                                    {row.note ? row.note : <span className="text-slate-300 font-normal">ไม่มีบันทึกรายละเอียดงาน</span>}
-                                </div>
-                            </td>
-                            <td className="px-6 py-5">
-                                <div className="flex items-center gap-2 text-slate-700 font-bold text-xs">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-[10px] font-black uppercase">
-                                        {(row.projectManager || 'N').charAt(0)}
-                                    </div>
-                                    {row.projectManager || '-'}
-                                </div>
-                            </td>
-                            <td className="px-6 py-5 text-center">
-                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter shadow-sm ${['Won', 'Done'].includes(row.status) ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                                    {row.status}
-                                </span>
-                            </td>
-                            <td className="px-6 py-5 text-right font-mono font-black text-blue-600 text-lg">
-                                {row.category === 'Presale' && row.value ? `${(row.value/1000000).toFixed(1)}M` : '-'}
-                            </td>
-                            <td className="px-6 py-5 text-right font-mono font-black text-amber-600 text-lg">
-                                {row.hours ? `${row.hours}h` : '-'}
-                            </td>
-                            <td className="px-6 py-5 text-center">
-                                <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                    {user.role === 'admin' && (
-                                        <>
-                                            <button onClick={() => handleEdit(row)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors"><Edit size={16} /></button>
-                                            <button onClick={() => handleDelete(row.id)} className="p-2 text-rose-600 hover:bg-rose-100 rounded-full transition-colors"><Trash size={16} /></button>
-                                        </>
-                                    )}
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            {displayData.length === 0 && (
-              <div className="p-16 text-center text-slate-400 font-black uppercase tracking-widest text-xs flex flex-col items-center justify-center">
-                  <Filter size={32} className="text-slate-200 mb-3" />
-                  No matching tasks found for this filter.
-              </div>
-            )}
-        </div>
-      </div>
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts || {};
 
-      {/* FORM MODAL */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
-            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 text-left my-8">
-                <div className="p-8 border-b flex justify-between items-center bg-slate-50 rounded-t-[2rem]">
-                    <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">{editingId ? 'แก้ไขข้อมูล' : 'บันทึกกิจกรรมใหม่'}</h3>
-                    <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all"><X size={20} /></button>
+        // --- Custom Icons (Replaces Lucide-react for pure HTML setup) ---
+        const Icon = ({ path, color = "currentColor", size = 18, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            TrendingUp: <Icon path={<><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></>} size={24} />,
+            Clock: <Icon path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} size={24} />,
+            Filter: <Icon path={<><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></>} size={16} />,
+            DollarSign: <Icon path={<><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>} size={24} />,
+            Target: <Icon path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>} size={24} />,
+            User: <Icon path={<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>} size={14} />,
+            Eye: <Icon path={<><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></>} size={16} />,
+            EyeOff: <Icon path={<><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></>} size={16} />,
+            UserCheck: <Icon path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></>} size={14} />,
+            Plus: <Icon path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} size={16} />,
+            LogOut: <Icon path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>} size={16} />,
+            X: <Icon path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={20} />,
+            Edit: <Icon path={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>} size={16} />,
+            Trash: <Icon path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>} size={16} />,
+            Calendar: <Icon path={<><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>} size={12} />,
+            Download: <Icon path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} size={16} />
+        };
+
+        const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
+
+        const getWeekNumber = (dateStr) => {
+            const date = new Date(dateStr);
+            const onejan = new Date(date.getFullYear(), 0, 1);
+            const week = Math.ceil((((date - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+            return `W${week.toString().padStart(2, '0')}`;
+        };
+
+        const LoginScreen = ({ onLogin, error, loading }) => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onLogin(email, password);
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 text-left font-sans">
+                <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md space-y-4">
+                    <h2 className="text-2xl font-black text-center text-slate-800 uppercase tracking-tighter">Dashboard Login</h2>
+                    <input 
+                    type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required 
+                    className="w-full border border-slate-200 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" 
+                    />
+                    <input 
+                    type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required 
+                    className="w-full border border-slate-200 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500" 
+                    />
+                    {error && <p className="text-rose-500 text-xs font-bold text-center bg-rose-50 p-3 rounded-xl border border-rose-100">{error}</p>}
+                    <button 
+                    type="submit" disabled={loading}
+                    className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-widest disabled:opacity-50"
+                    >
+                    {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+                    </button>
+                </form>
                 </div>
-                <form onSubmit={handleAddSubmit} className="p-8 space-y-5 max-h-[75vh] overflow-y-auto">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่บันทึก (LOG)</label>
-                            <input type="date" required className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.date} onChange={e => setNewActivity({...newActivity, date: e.target.value})} />
-                        </div>
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่เริ่มโครงการ</label>
-                            <input type="date" className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
-                        </div>
+            );
+        };
+
+        const App = () => {
+            // Application State
+            const [user, setUser] = useState(null);
+            const [data, setData] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [authError, setAuthError] = useState('');
+            const [isLoggingIn, setIsLoggingIn] = useState(false);
+            const [currentTime, setCurrentTime] = useState(new Date());
+
+            // UI & Filter State
+            const [showModal, setShowModal] = useState(false);
+            const [editingId, setEditingId] = useState(null);
+            const [showDone, setShowDone] = useState(false);
+            const [selectedWeek, setSelectedWeek] = useState('All');
+            const [activeKpiFilter, setActiveKpiFilter] = useState('All');
+
+            // Form State
+            const [newActivity, setNewActivity] = useState({
+                date: new Date().toISOString().split('T')[0],
+                startDate: new Date().toISOString().split('T')[0],
+                category: 'Presale', task: '', note: '', customer: '', 
+                projectManager: '', status: 'Proposal', value: 0, hours: 0, nextWeek: '', okr: 'Yes',
+                subCategory: 'Technical Consultancy' 
+            });
+
+            // Effects
+            useEffect(() => {
+                const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            useEffect(() => {
+                const svc = window.dbService;
+                if (!svc || !svc.auth) return;
+                const unsubscribe = svc.onAuthStateChanged(svc.auth, (fbUser) => {
+                    if (fbUser) {
+                        const email = fbUser.email.toLowerCase();
+                        const isAdmin = email.includes('admin') || email === 'panuwatk@gmail.com';
+                        setUser({ email: fbUser.email, role: isAdmin ? 'admin' : 'viewer' });
+                    } else {
+                        setUser(null);
+                    }
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user || !window.dbService || !window.dbService.db) return;
+                const { db, collection, onSnapshot, query, orderBy } = window.dbService;
+                const q = query(collection(db, "tasks"), orderBy("date", "desc"));
+                
+                const unsubscribe = onSnapshot(q, (snapshot) => {
+                    const docs = snapshot.docs.map(doc => {
+                        const d = doc.data();
+                        return { 
+                            id: doc.id, 
+                            ...d,
+                            note: d.note || d.activityNote || d.activity || "" 
+                        };
+                    });
+                    setData(docs);
+                }, (error) => {
+                    console.error("Firestore Error:", error);
+                });
+                return () => unsubscribe();
+            }, [user]);
+
+            // Handlers
+            const handleLogin = async (email, password) => {
+                setIsLoggingIn(true);
+                setAuthError('');
+                try {
+                    await window.dbService.signInWithEmailAndPassword(window.dbService.auth, email.trim(), password);
+                } catch (err) {
+                    setAuthError("ล็อกอินไม่สำเร็จ กรุณาตรวจสอบอีเมลและรหัสผ่าน");
+                } finally {
+                    setIsLoggingIn(false);
+                }
+            };
+
+            const handleLogout = () => {
+                window.dbService.signOut(window.dbService.auth);
+            };
+
+            const handleCategoryChange = (e) => {
+                const newCat = e.target.value;
+                let defaultStatus = 'In Progress'; 
+                if (newCat === 'Presale') defaultStatus = 'Proposal';
+                
+                setNewActivity({
+                    ...newActivity, 
+                    category: newCat, 
+                    status: defaultStatus,
+                    subCategory: newCat === 'Operational Support' ? 'Technical Consultancy' : ''
+                });
+            };
+
+            const handleEdit = (item) => {
+                setEditingId(item.id);
+                setNewActivity({
+                    date: item.date || "",
+                    startDate: item.startDate || item.date || "",
+                    category: item.category || "Presale",
+                    subCategory: item.subCategory || "Technical Consultancy",
+                    task: item.task || "",
+                    note: item.note || "",
+                    customer: item.customer || "",
+                    projectManager: item.projectManager || "",
+                    status: item.status || "Proposal",
+                    value: item.value || 0,
+                    hours: item.hours || 0,
+                    nextWeek: item.nextWeek || "",
+                    okr: item.okr || "Yes"
+                });
+                setShowModal(true);
+            };
+
+            const handleDelete = async (id) => {
+                if (!window.confirm("Confirm delete?")) return;
+                try {
+                    await window.dbService.deleteDoc(window.dbService.doc(window.dbService.db, "tasks", id));
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            const handleAddSubmit = async (e) => {
+                e.preventDefault();
+                const { db, addDoc, updateDoc, doc, collection } = window.dbService;
+                const isOpSupport = newActivity.category === 'Operational Support';
+                
+                const payload = {
+                    date: newActivity.date,
+                    startDate: newActivity.startDate,
+                    category: newActivity.category,
+                    subCategory: isOpSupport ? newActivity.subCategory : '',
+                    task: newActivity.task,
+                    note: newActivity.note.trim(),
+                    customer: newActivity.customer,
+                    projectManager: newActivity.projectManager,
+                    status: newActivity.status,
+                    nextWeek: newActivity.nextWeek.trim(),
+                    okr: newActivity.okr,
+                    week: getWeekNumber(newActivity.date),
+                    hours: Number(newActivity.hours) || 0,
+                    value: newActivity.category === 'Presale' ? Number(newActivity.value) : 0,
+                    updatedAt: new Date().toISOString()
+                };
+
+                try {
+                    if (editingId) {
+                        await updateDoc(doc(db, "tasks", editingId), payload);
+                    } else {
+                        await addDoc(collection(db, "tasks"), payload);
+                    }
+                    setShowModal(false);
+                } catch (err) {
+                    alert("Error saving data: " + err.message);
+                }
+            };
+
+            // Processed Data
+            const uniqueWeeks = useMemo(() => [...new Set(data.map(d => d.week))].filter(Boolean).sort(), [data]);
+
+            // 1. Base Filter
+            const baseFilteredData = useMemo(() => {
+                return data.filter(item => {
+                    const weekMatch = selectedWeek === 'All' || item.week === selectedWeek;
+                    const statusMatch = showDone ? true : item.status !== 'Done';
+                    return weekMatch && statusMatch;
+                });
+            }, [data, selectedWeek, showDone]);
+
+            // 2. Display Data
+            const displayData = useMemo(() => {
+                if (activeKpiFilter === 'Pipeline') return baseFilteredData.filter(d => d.category === 'Presale');
+                if (activeKpiFilter === 'WinRate') return baseFilteredData.filter(d => d.category === 'Presale' && d.status === 'Won');
+                if (activeKpiFilter === 'BAU') return baseFilteredData.filter(d => ['BAU', 'Operational Support'].includes(d.category));
+                if (activeKpiFilter === 'OKR') return baseFilteredData.filter(d => d.okr === 'Yes');
+                return baseFilteredData;
+            }, [baseFilteredData, activeKpiFilter]);
+
+            // KPIs
+            const kpis = useMemo(() => {
+                const presale = baseFilteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0);
+                const bauAndOps = baseFilteredData.reduce((acc, curr) => acc + (['BAU', 'Operational Support'].includes(curr.category) ? Number(curr.hours || 0) : 0), 0);
+                const winItems = baseFilteredData.filter(d => d.category === 'Presale');
+                const winRate = winItems.length ? Math.round((winItems.filter(d => d.status === 'Won').length / winItems.length) * 100) : 0;
+                const okrRate = baseFilteredData.length ? Math.round((baseFilteredData.filter(d => d.okr === 'Yes').length / baseFilteredData.length) * 100) : 0;
+                return { presale, bauAndOps, winRate, okrRate };
+            }, [baseFilteredData]);
+
+            // Charts Data
+            const chartData = useMemo(() => {
+                const weeks = [...new Set(data.map(d => d.week))].sort().slice(-6);
+                return weeks.map(w => {
+                    const items = baseFilteredData.filter(d => d.week === w);
+                    return {
+                        name: w,
+                        presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0) / 1000000,
+                        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0),
+                        opSupport: items.reduce((acc, curr) => acc + (curr.category === 'Operational Support' ? Number(curr.hours || 0) : 0), 0)
+                    };
+                });
+            }, [data, baseFilteredData]);
+
+            const statusData = useMemo(() => {
+                return Object.entries(
+                    baseFilteredData.reduce((acc, c) => ({...acc, [c.status]: (acc[c.status] || 0) + 1}), {})
+                ).map(([name, value]) => ({name, value}));
+            }, [baseFilteredData]);
+
+            // Export to CSV Function
+            const exportToCSV = () => {
+                const headers = [
+                    "Week", "Category", "Sub-Category", "Task/Project", "Date",
+                    "Customer", "Owner", "Project Manager", "Status", "OKR",
+                    "Value (THB)", "Hours", "Next Week Plan", "Note"
+                ];
+
+                const csvContent = [
+                    headers.join(","),
+                    ...displayData.map(row => [
+                        row.week,
+                        row.category,
+                        row.subCategory || "-",
+                        `"${(row.task || "").replace(/"/g, '""')}"`,
+                        row.date,
+                        `"${(row.customer || "").replace(/"/g, '""')}"`,
+                        row.owner || "-",
+                        row.projectManager || "-",
+                        row.status,
+                        row.okr || "-",
+                        row.value || 0,
+                        row.hours || 0,
+                        `"${(row.nextWeek || "").replace(/"/g, '""')}"`,
+                        `"${(row.note || "").replace(/"/g, '""')}"`
+                    ].join(","))
+                ].join("\n");
+
+                const bom = "\uFEFF";
+                const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `SA_Performance_Export_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            if (loading) {
+                return null;
+            }
+
+            if (!user) return <LoginScreen onLogin={handleLogin} error={authError} loading={isLoggingIn} />;
+
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const formattedDate = currentTime.toLocaleDateString('en-US', dateOptions);
+            const formattedTime = currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            return (
+                <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen font-sans">
+                
+                {/* Header */}
+                <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <div>
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">
+                        Presale &amp; BAU Performance
+                    </h1>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{user.email}</span>
+                        <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">{user.role}</span>
+                    </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 gap-4">
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ประเภทงาน (Category)</label>
-                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-blue-500" value={newActivity.category} onChange={handleCategoryChange}>
-                                <option value="Presale">Presale</option>
-                                <option value="BAU">BAU</option>
-                                <option value="Operational Support">Operational Support</option>
-                            </select>
+                    <div className="flex flex-col lg:flex-row flex-wrap gap-4 w-full xl:w-auto xl:items-center">
+                    <div className="text-left lg:text-right px-4 lg:border-r border-slate-200">
+                        <p className="text-sm font-black text-slate-700">{formattedDate}</p>
+                        <p className="text-xs font-bold text-blue-500 uppercase tracking-widest">{formattedTime}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 items-center w-full lg:w-auto">
+                        <button 
+                        onClick={() => setShowDone(!showDone)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black transition-colors uppercase tracking-widest ${
+                            showDone ? 'bg-slate-200 text-slate-700' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                        }`}
+                        >
+                        {showDone ? Icons.Eye : Icons.EyeOff}
+                        {showDone ? 'Showing Done' : 'Hiding Done'}
+                        </button>
+
+                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl text-[10px] font-black group">
+                        <span className="text-slate-400 group-hover:text-blue-600 transition-colors">{Icons.Filter}</span>
+                        <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-transparent outline-none uppercase font-black text-blue-600 cursor-pointer">
+                            <option value="All">All Weeks</option>
+                            {uniqueWeeks.map(w => <option key={w} value={w}>{w}</option>)}
+                        </select>
                         </div>
                         
-                        {newActivity.category === 'Operational Support' && (
-                            <div><label className="text-[10px] font-black text-teal-500 uppercase mb-2 block ml-1">หมวดย่อย (Sub-Category)</label>
-                                <select className="w-full border border-teal-200 p-3 rounded-2xl text-sm outline-none bg-teal-50 text-teal-800 font-bold focus:ring-2 focus:ring-teal-500" value={newActivity.subCategory} onChange={e => setNewActivity({...newActivity, subCategory: e.target.value})}>
-                                    <option value="Technical Consultancy">Technical Consultancy</option>
-                                    <option value="Provisioning">Provisioning</option>
-                                </select>
-                            </div>
+                        <button 
+                        onClick={exportToCSV}
+                        className="bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow sm:flex-grow-0"
+                        >
+                        {Icons.Download} Export
+                        </button>
+                        
+                        {user.role === 'admin' && (
+                        <button 
+                            onClick={() => { 
+                            setEditingId(null); 
+                            setNewActivity({
+                                date: new Date().toISOString().split('T')[0],
+                                startDate: new Date().toISOString().split('T')[0],
+                                category: 'Presale', task: '', note: '', customer: '', 
+                                projectManager: '', status: 'Proposal', value: 0, hours: 0, nextWeek: '', okr: 'Yes',
+                                subCategory: 'Technical Consultancy' 
+                            });
+                            setShowModal(true); 
+                            }} 
+                            className="bg-blue-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow sm:flex-grow-0"
+                        >
+                            {Icons.Plus} Add
+                        </button>
                         )}
-
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ชื่อโครงการ / Task</label>
-                            <input type="text" required placeholder="ชื่อโครงการ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
-                        </div>
+                        <button 
+                        onClick={handleLogout} 
+                        className="bg-white border border-slate-200 text-slate-500 px-4 py-2.5 rounded-2xl text-[10px] font-black hover:bg-slate-50 uppercase flex items-center justify-center gap-2 flex-grow sm:flex-grow-0"
+                        >
+                        {Icons.LogOut}
+                        </button>
                     </div>
-
-                    <div><label className="text-[10px] font-black text-blue-600 uppercase mb-2 block ml-1 underline tracking-wider">รายละเอียดสิ่งที่ทำในสัปดาห์นี้</label>
-                        <textarea required rows="4" className="w-full border border-blue-100 p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30 font-bold placeholder-blue-300" 
-                            value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="ระบุสิ่งที่ทำลงไปในสัปดาห์นี้..."></textarea>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ลูกค้า (Customer)</label>
-                            <input type="text" placeholder="ชื่อบริษัทลูกค้า..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.customer} onChange={e => setNewActivity({...newActivity, customer: e.target.value})} />
-                        </div>
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Project Manager</label>
-                            <input type="text" placeholder="ชื่อผู้รับผิดชอบ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.projectManager} onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})} />
-                        </div>
+                </header>
+
+                {/* KPI CARDS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div 
+                    onClick={() => setActiveKpiFilter(activeKpiFilter === 'Pipeline' ? 'All' : 'Pipeline')}
+                    className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
+                        activeKpiFilter === 'Pipeline' ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50/50' : 'border-slate-200'
+                    }`}
+                    >
+                    <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'Pipeline' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                        {Icons.DollarSign}
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Active Pipeline</p>
+                        <h3 className="text-xl font-black">{(kpis.presale / 1000000).toFixed(2)}M</h3>
+                    </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">สถานะ</label>
-                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.status} onChange={e => setNewActivity({...newActivity, status: e.target.value})}>
-                                {newActivity.category === 'Presale' ? <><option value="Lead">Lead</option><option value="Proposal">Proposal</option><option value="Bit">Bit</option><option value="Won">Won</option><option value="Lost">Lost</option></> : <><option value="In Progress">In Progress</option><option value="Done">Done</option><option value="Pending">Pending</option></>}
-                            </select>
-                        </div>
-                        <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">OKR</label>
-                            <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.okr} onChange={e => setNewActivity({...newActivity, okr: e.target.value})}><option value="Yes">Yes</option><option value="No">No</option></select>
-                        </div>
+                    <div 
+                    onClick={() => setActiveKpiFilter(activeKpiFilter === 'WinRate' ? 'All' : 'WinRate')}
+                    className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
+                        activeKpiFilter === 'WinRate' ? 'border-emerald-500 ring-2 ring-emerald-200 bg-emerald-50/50' : 'border-slate-200'
+                    }`}
+                    >
+                    <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'WinRate' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'}`}>
+                        {Icons.TrendingUp}
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Win Rate</p>
+                        <h3 className="text-xl font-black">{kpis.winRate}%</h3>
+                    </div>
                     </div>
 
-                    {/* Value and Hours separated for Presale, Hours only for BAU/Ops */}
-                    <div className="grid grid-cols-2 gap-4">
-                        {newActivity.category === 'Presale' && (
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">มูลค่า Value (THB)</label>
-                                <input type="number" step="any" className="w-full border border-slate-200 p-3 rounded-2xl text-sm font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.value} onChange={e => setNewActivity({...newActivity, value: e.target.value})} />
+                    <div 
+                    onClick={() => setActiveKpiFilter(activeKpiFilter === 'BAU' ? 'All' : 'BAU')}
+                    className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
+                        activeKpiFilter === 'BAU' ? 'border-amber-500 ring-2 ring-amber-200 bg-amber-50/50' : 'border-slate-200'
+                    }`}
+                    >
+                    <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'BAU' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-600'}`}>
+                        {Icons.Clock}
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">BAU & Ops Hrs</p>
+                        <h3 className="text-xl font-black">{kpis.bauAndOps}h</h3>
+                    </div>
+                    </div>
+
+                    <div 
+                    onClick={() => setActiveKpiFilter(activeKpiFilter === 'OKR' ? 'All' : 'OKR')}
+                    className={`bg-white p-6 rounded-3xl shadow-sm border flex items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md ${
+                        activeKpiFilter === 'OKR' ? 'border-purple-500 ring-2 ring-purple-200 bg-purple-50/50' : 'border-slate-200'
+                    }`}
+                    >
+                    <div className={`p-3 rounded-2xl transition-colors ${activeKpiFilter === 'OKR' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-600'}`}>
+                        {Icons.Target}
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">OKR Progress</p>
+                        <h3 className="text-xl font-black">{kpis.okrRate}%</h3>
+                    </div>
+                    </div>
+                </div>
+
+                {/* CHARTS */}
+                {ResponsiveContainer && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                            <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Weekly Performance Trend
+                            </h4>
+                            <div className="h-[250px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} style={{fontSize: '10px', fontWeight: '900'}} />
+                                        <YAxis axisLine={false} tickLine={false} style={{fontSize: '10px'}} />
+                                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                                        <Legend iconType="circle" />
+                                        <Bar dataKey="presale" name="Presale (M THB)" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                                        <Bar dataKey="bau" name="BAU (Hrs)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                                        <Bar dataKey="opSupport" name="Op Support (Hrs)" fill="#14b8a6" radius={[6, 6, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
                             </div>
-                        )}
-                        <div className={newActivity.category !== 'Presale' ? 'col-span-2' : ''}>
-                            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ชั่วโมงทำงาน (Hours)</label>
-                            <input type="number" step="any" className="w-full border border-slate-200 p-3 rounded-2xl text-sm font-black text-amber-600 outline-none focus:ring-2 focus:ring-amber-500" value={newActivity.hours} onChange={e => setNewActivity({...newActivity, hours: e.target.value})} />
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                            <h4 className="font-black text-slate-800 mb-6 text-xs uppercase tracking-widest text-center">Status Distribution</h4>
+                            <div className="h-[250px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={statusData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                            {statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />)}
+                                        </Pie>
+                                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none'}} />
+                                        <Legend verticalAlign="bottom" align="center" iconType="circle" />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
+                )}
 
-                    <div><label className="text-[10px] font-black text-indigo-600 uppercase mb-2 block ml-1">แผนงานสัปดาห์หน้า (Next Step)</label>
-                        <input type="text" placeholder="แผนงานขั้นต่อไป..." className="w-full border border-indigo-100 p-3 rounded-2xl text-sm bg-indigo-50/50 outline-none focus:ring-2 focus:ring-indigo-500" value={newActivity.nextWeek} onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})} />
+                {/* ACTIVITY LOG TABLE */}
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="p-6 bg-slate-50 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex items-center gap-3">
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Activity Detail Log</h4>
+                        {activeKpiFilter !== 'All' && (
+                            <span 
+                            className="text-[10px] px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-indigo-200 transition-colors" 
+                            onClick={() => setActiveKpiFilter('All')}
+                            >
+                            Filtered by: {activeKpiFilter} <span className="ml-1 text-indigo-400 text-sm leading-none">×</span>
+                            </span>
+                        )}
+                        </div>
+                        <div className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                        Showing {displayData.length} items
+                        </div>
                     </div>
-                    <div className="flex justify-end gap-4 pt-6 border-t border-slate-100">
-                        <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">ยกเลิก</button>
-                        <button type="submit" className="px-12 py-4 bg-blue-600 text-white rounded-[1.25rem] text-xs font-black shadow-xl shadow-blue-100 uppercase tracking-widest hover:scale-105 transition-all">บันทึกข้อมูล</button>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest border-b border-slate-100">
+                                <tr>
+                                    <th className="px-6 py-5">Week / Category / Task</th>
+                                    <th className="px-6 py-5 bg-blue-50/50">Activity Note (สัปดาห์นี้ทำอะไร)</th>
+                                    <th className="px-6 py-5">Project Manager</th>
+                                    <th className="px-6 py-5 text-center">Status</th>
+                                    <th className="px-6 py-5 text-right">Value (M)</th>
+                                    <th className="px-6 py-5 text-right">Hours (h)</th>
+                                    <th className="px-6 py-5 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-sm divide-y divide-slate-100 bg-white">
+                                {displayData.map(row => (
+                                    <tr key={row.id} className="hover:bg-slate-50 group transition-all">
+                                        <td className="px-6 py-5">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-blue-500 font-black text-[10px] uppercase">{row.week}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                                    row.category === 'Presale' ? 'bg-blue-100 text-blue-700' : 
+                                                    row.category === 'BAU' ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'
+                                                }`}>
+                                                    {row.category}
+                                                </span>
+                                            </div>
+                                            <div className="font-black text-slate-800 text-base leading-tight">
+                                                {row.task}
+                                            </div>
+                                            {row.category === 'Operational Support' && row.subCategory && (
+                                                <div className="text-[10px] text-teal-600 font-bold mt-1">({row.subCategory})</div>
+                                            )}
+                                            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-2 font-bold bg-slate-100 w-fit px-2 py-0.5 rounded">
+                                                {Icons.Calendar} Start: {row.startDate || row.date}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5 bg-blue-50/20 min-w-[320px] max-w-md">
+                                            <div className="text-[9px] text-blue-400 font-black mb-2 flex items-center gap-1 uppercase">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Log Date: {row.date}
+                                            </div>
+                                            <div className="text-slate-800 font-bold whitespace-pre-wrap italic text-xs leading-relaxed border-l-2 border-blue-200 pl-3">
+                                                {row.note ? row.note : <span className="text-slate-300 font-normal">ไม่มีบันทึกรายละเอียดงาน</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="flex items-center gap-2 text-slate-700 font-bold text-xs">
+                                                <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-[10px] font-black uppercase">
+                                                    {(row.projectManager || 'N').charAt(0)}
+                                                </div>
+                                                {row.projectManager || '-'}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5 text-center">
+                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter shadow-sm ${['Won', 'Done'].includes(row.status) ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                                {row.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5 text-right font-mono font-black text-blue-600 text-lg">
+                                            {row.category === 'Presale' && row.value ? `${(row.value/1000000).toFixed(1)}M` : '-'}
+                                        </td>
+                                        <td className="px-6 py-5 text-right font-mono font-black text-amber-600 text-lg">
+                                            {row.hours ? `${row.hours}h` : '-'}
+                                        </td>
+                                        <td className="px-6 py-5 text-center">
+                                            <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                {user.role === 'admin' && (
+                                                    <>
+                                                        <button onClick={() => handleEdit(row)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors">{Icons.Edit}</button>
+                                                        <button onClick={() => handleDelete(row.id)} className="p-2 text-rose-600 hover:bg-rose-100 rounded-full transition-colors">{Icons.Trash}</button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {displayData.length === 0 && (
+                        <div className="p-16 text-center text-slate-400 font-black uppercase tracking-widest text-xs flex flex-col items-center justify-center">
+                            <div className="mb-3 text-slate-200">{Icons.Filter}</div>
+                            No matching tasks found for this filter.
+                        </div>
+                        )}
                     </div>
-                </form>
-            </div>
-        </div>
-      )}
-    </div>
-  );
-};
+                </div>
 
-export default App;
+                {/* FORM MODAL */}
+                {showModal && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
+                        <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 text-left my-8">
+                            <div className="p-8 border-b flex justify-between items-center bg-slate-50 rounded-t-[2rem]">
+                                <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">{editingId ? 'แก้ไขข้อมูล' : 'บันทึกกิจกรรมใหม่'}</h3>
+                                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all">{Icons.X}</button>
+                            </div>
+                            <form onSubmit={handleAddSubmit} className="p-8 space-y-5 max-h-[75vh] overflow-y-auto">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่บันทึก (LOG)</label>
+                                        <input type="date" required className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.date} onChange={e => setNewActivity({...newActivity, date: e.target.value})} />
+                                    </div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">วันที่เริ่มโครงการ</label>
+                                        <input type="date" className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.startDate} onChange={e => setNewActivity({...newActivity, startDate: e.target.value})} />
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ประเภทงาน (Category)</label>
+                                        <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-blue-500" value={newActivity.category} onChange={handleCategoryChange}>
+                                            <option value="Presale">Presale</option>
+                                            <option value="BAU">BAU</option>
+                                            <option value="Operational Support">Operational Support</option>
+                                        </select>
+                                    </div>
+                                    
+                                    {newActivity.category === 'Operational Support' && (
+                                        <div><label className="text-[10px] font-black text-teal-500 uppercase mb-2 block ml-1">หมวดย่อย (Sub-Category)</label>
+                                            <select className="w-full border border-teal-200 p-3 rounded-2xl text-sm outline-none bg-teal-50 text-teal-800 font-bold focus:ring-2 focus:ring-teal-500" value={newActivity.subCategory} onChange={e => setNewActivity({...newActivity, subCategory: e.target.value})}>
+                                                <option value="Technical Consultancy">Technical Consultancy</option>
+                                                <option value="Provisioning">Provisioning</option>
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ชื่อโครงการ / Task</label>
+                                        <input type="text" required placeholder="ชื่อโครงการ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.task} onChange={e => setNewActivity({...newActivity, task: e.target.value})} />
+                                    </div>
+                                </div>
+
+                                <div><label className="text-[10px] font-black text-blue-600 uppercase mb-2 block ml-1 underline tracking-wider">รายละเอียดสิ่งที่ทำในสัปดาห์นี้</label>
+                                    <textarea required rows="4" className="w-full border border-blue-100 p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30 font-bold placeholder-blue-300" 
+                                        value={newActivity.note} onChange={e => setNewActivity({...newActivity, note: e.target.value})} placeholder="ระบุสิ่งที่ทำลงไปในสัปดาห์นี้..."></textarea>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ลูกค้า (Customer)</label>
+                                        <input type="text" placeholder="ชื่อบริษัทลูกค้า..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.customer} onChange={e => setNewActivity({...newActivity, customer: e.target.value})} />
+                                    </div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Project Manager</label>
+                                        <input type="text" placeholder="ชื่อผู้รับผิดชอบ..." className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.projectManager} onChange={e => setNewActivity({...newActivity, projectManager: e.target.value})} />
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">สถานะ</label>
+                                        <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.status} onChange={e => setNewActivity({...newActivity, status: e.target.value})}>
+                                            {newActivity.category === 'Presale' ? <><option value="Lead">Lead</option><option value="Proposal">Proposal</option><option value="Bit">Bit</option><option value="Won">Won</option><option value="Lost">Lost</option></> : <><option value="In Progress">In Progress</option><option value="Done">Done</option><option value="Pending">Pending</option></>}
+                                        </select>
+                                    </div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">OKR</label>
+                                        <select className="w-full border border-slate-200 p-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.okr} onChange={e => setNewActivity({...newActivity, okr: e.target.value})}><option value="Yes">Yes</option><option value="No">No</option></select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    {newActivity.category === 'Presale' && (
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">มูลค่า Value (THB)</label>
+                                            <input type="number" step="any" className="w-full border border-slate-200 p-3 rounded-2xl text-sm font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500" value={newActivity.value} onChange={e => setNewActivity({...newActivity, value: e.target.value})} />
+                                        </div>
+                                    )}
+                                    <div className={newActivity.category !== 'Presale' ? 'col-span-2' : ''}>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">ชั่วโมงทำงาน (Hours)</label>
+                                        <input type="number" step="any" className="w-full border border-slate-200 p-3 rounded-2xl text-sm font-black text-amber-600 outline-none focus:ring-2 focus:ring-amber-500" value={newActivity.hours} onChange={e => setNewActivity({...newActivity, hours: e.target.value})} />
+                                    </div>
+                                </div>
+
+                                <div><label className="text-[10px] font-black text-indigo-600 uppercase mb-2 block ml-1">แผนงานสัปดาห์หน้า (Next Step)</label>
+                                    <input type="text" placeholder="แผนงานขั้นต่อไป..." className="w-full border border-indigo-100 p-3 rounded-2xl text-sm bg-indigo-50/50 outline-none focus:ring-2 focus:ring-indigo-500" value={newActivity.nextWeek} onChange={e => setNewActivity({...newActivity, nextWeek: e.target.value})} />
+                                </div>
+                                <div className="flex justify-end gap-4 pt-6 border-t border-slate-100">
+                                    <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">ยกเลิก</button>
+                                    <button type="submit" className="px-12 py-4 bg-blue-600 text-white rounded-[1.25rem] text-xs font-black shadow-xl shadow-blue-100 uppercase tracking-widest hover:scale-105 transition-all">บันทึกข้อมูล</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+                </div>
+            );
+        };
+
+        // --- Reliability Bootstrapper ---
+        function runDashboard() {
+            const check = () => {
+                const isReady = window.dbService && window.dbService.status === 'ready' && !!window.ReactDOM && !!window.Recharts;
+                if (isReady) {
+                    const rootEl = document.getElementById('root');
+                    if (rootEl) {
+                        const root = ReactDOM.createRoot(rootEl);
+                        root.render(<App />);
+                    }
+                } else {
+                    setTimeout(check, 100);
+                }
+            };
+            check();
+        }
+        window.addEventListener('load', runDashboard);
+    </script>
+</body>
+</html>
