@@ -110,6 +110,13 @@
             return `W${week.toString().padStart(2, '0')}`;
         };
 
+        // ฟังก์ชันช่วยทำความสะอาดตัวเลข (ตัดลูกน้ำ, ตัวอักษร ออก ป้องกันกราฟพัง)
+        const parseNum = (val) => {
+            if (!val) return 0;
+            const num = parseFloat(val.toString().replace(/,/g, '').replace(/[^\d.-]/g, ''));
+            return isNaN(num) ? 0 : num;
+        };
+
         const LoginScreen = ({ onLogin, error, loading }) => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
@@ -155,7 +162,7 @@
             // UI & Filter State
             const [showModal, setShowModal] = useState(false);
             const [editingId, setEditingId] = useState(null);
-            const [showDone, setShowDone] = useState(false);
+            const [showDone, setShowDone] = useState(true); // ปรับค่าเริ่มต้นให้โชว์งานทั้งหมด
             const [selectedWeek, setSelectedWeek] = useState('All');
             const [activeKpiFilter, setActiveKpiFilter] = useState('All');
 
@@ -328,8 +335,8 @@
 
             // KPIs
             const kpis = useMemo(() => {
-                const presale = baseFilteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0);
-                const bauAndOps = baseFilteredData.reduce((acc, curr) => acc + (['BAU', 'Operational Support'].includes(curr.category) ? Number(curr.hours || 0) : 0), 0);
+                const presale = baseFilteredData.reduce((acc, curr) => acc + (curr.category === 'Presale' ? parseNum(curr.value) : 0), 0);
+                const bauAndOps = baseFilteredData.reduce((acc, curr) => acc + (['BAU', 'Operational Support'].includes(curr.category) ? parseNum(curr.hours) : 0), 0);
                 const winItems = baseFilteredData.filter(d => d.category === 'Presale');
                 const winRate = winItems.length ? Math.round((winItems.filter(d => d.status === 'Won').length / winItems.length) * 100) : 0;
                 const okrRate = baseFilteredData.length ? Math.round((baseFilteredData.filter(d => d.okr === 'Yes').length / baseFilteredData.length) * 100) : 0;
@@ -338,17 +345,18 @@
 
             // Charts Data
             const chartData = useMemo(() => {
-                const weeks = [...new Set(data.map(d => d.week))].sort().slice(-6);
+                // อิงจากข้อมูลที่ถูก Filter (baseFilteredData) เพื่อให้กราฟเปลี่ยนตามสัปดาห์ที่เลือก
+                const weeks = [...new Set(baseFilteredData.map(d => d.week))].filter(Boolean).sort().slice(-6);
                 return weeks.map(w => {
                     const items = baseFilteredData.filter(d => d.week === w);
                     return {
                         name: w,
-                        presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? Number(curr.value || 0) : 0), 0),
-                        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? Number(curr.hours || 0) : 0), 0),
-                        opSupport: items.reduce((acc, curr) => acc + (curr.category === 'Operational Support' ? Number(curr.hours || 0) : 0), 0)
+                        presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? parseNum(curr.value) : 0), 0),
+                        bau: items.reduce((acc, curr) => acc + (curr.category === 'BAU' ? parseNum(curr.hours) : 0), 0),
+                        opSupport: items.reduce((acc, curr) => acc + (curr.category === 'Operational Support' ? parseNum(curr.hours) : 0), 0)
                     };
                 });
-            }, [data, baseFilteredData]);
+            }, [baseFilteredData]);
 
             const statusData = useMemo(() => {
                 return Object.entries(
@@ -377,8 +385,8 @@
                         row.projectManager || "-",
                         row.status,
                         row.okr || "-",
-                        row.value || 0,
-                        row.hours || 0,
+                        parseNum(row.value),
+                        parseNum(row.hours),
                         `"${(row.nextWeek || "").replace(/"/g, '""')}"`,
                         `"${(row.note || "").replace(/"/g, '""')}"`
                     ].join(","))
@@ -659,10 +667,10 @@
                                             </span>
                                         </td>
                                         <td className="px-6 py-5 text-right font-mono font-black text-blue-600 text-lg">
-                                            {row.category === 'Presale' ? `${Number(row.value || 0).toFixed(2)}M` : '-'}
+                                            {row.category === 'Presale' && row.value ? `${parseNum(row.value).toFixed(2)}M` : '-'}
                                         </td>
                                         <td className="px-6 py-5 text-right font-mono font-black text-amber-600 text-lg">
-                                            {row.hours ? `${row.hours}h` : '-'}
+                                            {['BAU', 'Operational Support'].includes(row.category) && row.hours ? `${parseNum(row.hours)}h` : '-'}
                                         </td>
                                         <td className="px-6 py-5 text-center">
                                             <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
