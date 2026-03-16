@@ -315,7 +315,7 @@
             // Processed Data
             const uniqueWeeks = useMemo(() => [...new Set(data.map(d => d.week))].filter(Boolean).sort(), [data]);
 
-            // 1. Base Filter
+            // 1. Base Filter (ใช้กรองข้อมูล KPI, ตาราง, และ Status Distribution)
             const baseFilteredData = useMemo(() => {
                 return data.filter(item => {
                     const weekMatch = selectedWeek === 'All' || item.week === selectedWeek;
@@ -343,12 +343,24 @@
                 return { presale, bauAndOps, winRate, okrRate };
             }, [baseFilteredData]);
 
-            // Charts Data
+            // Charts Data (Weekly Performance Trend)
             const chartData = useMemo(() => {
-                // อิงจากข้อมูลที่ถูก Filter (baseFilteredData) เพื่อให้กราฟเปลี่ยนตามสัปดาห์ที่เลือก
-                const weeks = [...new Set(baseFilteredData.map(d => d.week))].filter(Boolean).sort().slice(-6);
-                return weeks.map(w => {
-                    const items = baseFilteredData.filter(d => d.week === w);
+                // คำนวณช่วงสัปดาห์ที่จะแสดง (สัปดาห์ปัจจุบัน + ย้อนหลัง 5 สัปดาห์)
+                let weeksToShow = [];
+                if (selectedWeek === 'All') {
+                    weeksToShow = uniqueWeeks.slice(-6);
+                } else {
+                    const targetIndex = uniqueWeeks.indexOf(selectedWeek);
+                    if (targetIndex !== -1) {
+                        weeksToShow = uniqueWeeks.slice(Math.max(0, targetIndex - 5), targetIndex + 1);
+                    } else {
+                        weeksToShow = [selectedWeek];
+                    }
+                }
+
+                return weeksToShow.map(w => {
+                    // ดึงข้อมูลดิบ (data) เพื่อข้ามการกรอง showDone ทำให้กราฟแท่งนี้มีค่าจากงานที่ Done ไปแล้วเสมอ
+                    const items = data.filter(d => d.week === w);
                     return {
                         name: w,
                         presale: items.reduce((acc, curr) => acc + (curr.category === 'Presale' ? parseNum(curr.value) : 0), 0),
@@ -356,8 +368,9 @@
                         opSupport: items.reduce((acc, curr) => acc + (curr.category === 'Operational Support' ? parseNum(curr.hours) : 0), 0)
                     };
                 });
-            }, [baseFilteredData]);
+            }, [data, selectedWeek, uniqueWeeks]);
 
+            // Status Distribution (Pie Chart) จะถูกกรองซ่อน Done ปกติเพราะใช้ baseFilteredData
             const statusData = useMemo(() => {
                 return Object.entries(
                     baseFilteredData.reduce((acc, c) => ({...acc, [c.status]: (acc[c.status] || 0) + 1}), {})
