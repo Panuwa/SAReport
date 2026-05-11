@@ -162,11 +162,7 @@
             // UI & Filter State
             const [showModal, setShowModal] = useState(false);
             const [editingId, setEditingId] = useState(null);
-            const [showDone, setShowDone] = useState(true);
-            const [showImportModal, setShowImportModal] = React.useState(false);
-            const [importEvents, setImportEvents] = React.useState([]);
-            const [importSaving, setImportSaving] = React.useState(false);
- // ปรับค่าเริ่มต้นให้โชว์งานทั้งหมด
+            const [showDone, setShowDone] = useState(true); // ปรับค่าเริ่มต้นให้โชว์งานทั้งหมด
             const [selectedWeek, setSelectedWeek] = useState('All');
             const [activeKpiFilter, setActiveKpiFilter] = useState('All');
 
@@ -280,123 +276,6 @@
                     alert(err.message);
                 }
             };
-
-
-            // ─── ICS IMPORT ───────────────────────────────────────────────
-            const AUTO_RULES_ICS = [
-                { keyword: 'NAVA',        day: 1, afternoon: null, category: 'Presale',             status: 'Proposal'    },
-                { keyword: 'GLOBAL STAR', day: 1, afternoon: null, category: 'Presale',             status: 'Proposal'    },
-                { keyword: 'GLOBALSTAR',  day: 1, afternoon: null, category: 'Presale',             status: 'Proposal'    },
-                { keyword: 'TSO',         day: 4, afternoon: null, category: 'Operational Support', status: 'In Progress' },
-                { keyword: 'GLOBAL STAR', day: 5, afternoon: true,  category: 'Operational Support',status: 'In Progress' },
-                { keyword: 'GLOBALSTAR',  day: 5, afternoon: true,  category: 'Operational Support',status: 'In Progress' },
-            ];
-            const autoDetectCat = (name, startISO) => {
-                const upper = (name||'').toUpperCase();
-                const d = new Date(startISO); const day=d.getDay(); const hour=d.getHours();
-                for (const r of AUTO_RULES_ICS) {
-                    if (!upper.includes(r.keyword)) continue;
-                    if (r.day!==null && r.day!==day) continue;
-                    if (r.afternoon===true && hour<12) continue;
-                    if (r.afternoon===false && hour>=12) continue;
-                    return { category: r.category, status: r.status, auto: true };
-                }
-                return { category: 'BAU', status: 'In Progress', auto: false };
-            };
-            const parseICSDate_import = (s) => {
-                const val = s.includes(':') ? s.split(':').pop().trim() : s.trim();
-                if (val.length===8) return new Date(parseInt(val.slice(0,4)),parseInt(val.slice(4,6))-1,parseInt(val.slice(6,8)),0,0,0).toISOString();
-                const y=val.slice(0,4),mo=val.slice(4,6),d=val.slice(6,8),h=val.slice(9,11),m=val.slice(11,13),sec=val.slice(13,15);
-                return val.endsWith('Z') ? new Date(`${y}-${mo}-${d}T${h}:${m}:${sec}Z`).toISOString() : new Date(`${y}-${mo}-${d}T${h}:${m}:${sec}`).toISOString();
-            };
-            const parseICS_import = (text) => {
-                const lines = text.replace(/\r\n /g,'').replace(/\r\n\t/g,'').split(/\r?\n/);
-                const evts=[]; let cur=null;
-                for (const raw of lines) {
-                    const line=raw.trim();
-                    if (line==='BEGIN:VEVENT'){cur={};continue;}
-                    if (line==='END:VEVENT'){if(cur)evts.push(cur);cur=null;continue;}
-                    if(!cur)continue;
-                    const colon=line.indexOf(':'); if(colon<0)continue;
-                    const key=line.slice(0,colon).split(';')[0].toUpperCase();
-                    const val=line.slice(colon+1).trim();
-                    const dec=s=>(s||'').replace(/\\n/g,'\n').replace(/\\,/g,',').replace(/\\;/g,';');
-                    if(key==='SUMMARY') cur.name=dec(val);
-                    if(key==='DTSTART') cur.start=parseICSDate_import(line.slice(colon+1).trim());
-                    if(key==='DTEND')   cur.end=parseICSDate_import(line.slice(colon+1).trim());
-                    if(key==='LOCATION') cur.location=dec(val);
-                    if(key==='DESCRIPTION') cur.desc=dec(val);
-                }
-                return evts;
-            };
-            const getLastWeekRange_import = () => {
-                const now=new Date();
-                const s=new Date(now); s.setDate(now.getDate()-now.getDay()-7); s.setHours(0,0,0,0);
-                const e=new Date(s);   e.setDate(s.getDate()+6);               e.setHours(23,59,59,999);
-                return {start:s,end:e};
-            };
-            const fmtTH = iso => iso ? new Date(iso).toLocaleDateString('th-TH',{weekday:'short',month:'short',day:'numeric'}) : '-';
-            const fmtTimeTH = iso => {
-                if(!iso) return ''; const d=new Date(iso);
-                if(d.getHours()===0&&d.getMinutes()===0) return 'ทั้งวัน';
-                return d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-            };
-            const handleICSFile = (file) => {
-                if(!file||!file.name.endsWith('.ics')){alert('กรุณาเลือกไฟล์ .ics ครับ');return;}
-                const reader=new FileReader();
-                reader.onload=(ev)=>{
-                    const {start,end}=getLastWeekRange_import();
-                    const all=parseICS_import(ev.target.result);
-                    const filtered=all
-                        .filter(ev=>{if(!ev.start)return false; const d=new Date(ev.start);return d>=start&&d<=end;})
-                        .sort((a,b)=>new Date(a.start)-new Date(b.start))
-                        .map((ev,i)=>{
-                            const dateStr=new Date(ev.start).toISOString().split('T')[0];
-                            const {category,status,auto}=autoDetectCat(ev.name,ev.start);
-                            return {
-                                _id:i, selected:true, auto,
-                                date:dateStr, startDate:dateStr,
-                                category, subCategory:category==='Operational Support'?'Technical Consultancy':'',
-                                task:ev.name||'', note:ev.desc||ev.location||'',
-                                customer:'', projectManager:'', status, okr:'Yes',
-                                hours:0, value:0, nextWeek:'', week:getWeekNumber(dateStr),
-                                _time: fmtTimeTH(ev.start),
-                            };
-                        });
-                    if(!filtered.length){alert('ไม่พบ events ในสัปดาห์ที่แล้ว กรุณาตรวจสอบวันที่ใน .ics');return;}
-                    setImportEvents(filtered);
-                    setShowImportModal(true);
-                };
-                reader.readAsText(file,'UTF-8');
-            };
-            const handleImportSubmit = async () => {
-                const toImport=importEvents.filter(e=>e.selected);
-                if(!toImport.length){alert('ไม่มี event ที่เลือก');return;}
-                setImportSaving(true);
-                const {db,addDoc,collection}=window.dbService;
-                try {
-                    for(const ev of toImport){
-                        const {_id,selected,auto,_time,...payload}=ev;
-                        payload.updatedAt=new Date().toISOString();
-                        await addDoc(collection(db,'tasks'),payload);
-                    }
-                    alert('✅ Import สำเร็จ '+toImport.length+' รายการ');
-                    setShowImportModal(false); setImportEvents([]);
-                } catch(err){ alert('Error: '+err.message); }
-                finally { setImportSaving(false); }
-            };
-            const updImportEv = (id,field,value) => {
-                setImportEvents(prev=>prev.map(e=>{
-                    if(e._id!==id) return e;
-                    const u={...e,[field]:value};
-                    if(field==='category'){
-                        u.status=value==='Presale'?'Proposal':'In Progress';
-                        u.subCategory=value==='Operational Support'?'Technical Consultancy':'';
-                    }
-                    return u;
-                }));
-            };
-            // ─── END ICS IMPORT ────────────────────────────────────────────
 
             const handleAddSubmit = async (e) => {
                 e.preventDefault();
@@ -596,10 +475,6 @@
                         </button>
                         
                         {user.role === 'admin' && (
-                        <label className="bg-teal-500 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black hover:bg-teal-600 shadow-xl shadow-teal-100 transition-all uppercase flex items-center justify-center gap-2 flex-grow sm:flex-grow-0 cursor-pointer" title="นำเข้าจาก Outlook .ics">
-                            📅 Import .ics
-                            <input type="file" accept=".ics" className="hidden" onChange={e=>{ if(e.target.files[0]) handleICSFile(e.target.files[0]); e.target.value=''; }} />
-                        </label>
                         <button 
                             onClick={() => { 
                             setEditingId(null); 
@@ -834,89 +709,6 @@
                 </div>
 
                 {/* FORM MODAL */}
-                
-            {/* ── IMPORT CALENDAR MODAL ── */}
-            {showImportModal && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-y-auto backdrop-blur-sm">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl border border-slate-100 text-left my-8">
-                        <div className="p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-[2rem]">
-                            <div>
-                                <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">📅 Import Calendar</h3>
-                                <p className="text-xs text-slate-400 mt-1">Events สัปดาห์ที่แล้ว — เลือกและปรับหมวดหมู่ก่อน Import</p>
-                            </div>
-                            <button onClick={()=>{setShowImportModal(false);setImportEvents([]);}} className="p-2 hover:bg-slate-200 rounded-full transition-all">{Icons.X}</button>
-                        </div>
-                        <div className="p-6 overflow-x-auto max-h-[65vh] overflow-y-auto">
-                            <div className="flex gap-3 mb-4 flex-wrap">
-                                <span className="text-xs bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-full font-bold">✅ Auto = จัดหมวดอัตโนมัติ (NAVA/GlobalStar/TSO)</span>
-                                <span className="text-xs bg-slate-50 text-slate-500 border border-slate-200 px-3 py-1.5 rounded-full font-bold">Events ที่พบ: {importEvents.length} รายการ | เลือก: {importEvents.filter(e=>e.selected).length}</span>
-                                <button onClick={()=>setImportEvents(p=>p.map(e=>({...e,selected:true})))} className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-full font-bold hover:bg-blue-100">เลือกทั้งหมด</button>
-                                <button onClick={()=>setImportEvents(p=>p.map(e=>({...e,selected:false})))} className="text-xs bg-slate-50 text-slate-500 border border-slate-200 px-3 py-1.5 rounded-full font-bold hover:bg-slate-100">ยกเลิกทั้งหมด</button>
-                            </div>
-                            <table className="w-full text-xs border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-100 text-slate-500 uppercase tracking-wider">
-                                        <th className="p-2 text-center w-8">✓</th>
-                                        <th className="p-2 text-left">ชื่อ Event / Task</th>
-                                        <th className="p-2 text-left">วันที่ / เวลา</th>
-                                        <th className="p-2 text-left">Category</th>
-                                        <th className="p-2 text-left">Status</th>
-                                        <th className="p-2 text-left">Note</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {importEvents.map(ev=>(
-                                        <tr key={ev._id} className={`border-b border-slate-100 ${ev.selected?'':'opacity-40'}`}>
-                                            <td className="p-2 text-center">
-                                                <input type="checkbox" checked={ev.selected} onChange={e=>updImportEv(ev._id,'selected',e.target.checked)} className="w-4 h-4 accent-blue-600"/>
-                                            </td>
-                                            <td className="p-2">
-                                                <div className="font-semibold text-slate-800">{ev.task}</div>
-                                                {ev.auto && <span className="inline-block bg-teal-100 text-teal-700 text-[10px] px-2 py-0.5 rounded-full font-bold mt-0.5">Auto</span>}
-                                            </td>
-                                            <td className="p-2 whitespace-nowrap text-slate-500">
-                                                <div>{ev.date}</div>
-                                                <div className="text-[10px]">{ev._time}</div>
-                                            </td>
-                                            <td className="p-2">
-                                                <select value={ev.category} onChange={e=>updImportEv(ev._id,'category',e.target.value)}
-                                                    className="border border-slate-200 rounded-xl p-1.5 text-xs outline-none bg-white focus:ring-2 focus:ring-blue-400 w-full">
-                                                    <option value="BAU">BAU</option>
-                                                    <option value="Presale">Presale</option>
-                                                    <option value="Operational Support">Operational Support</option>
-                                                </select>
-                                            </td>
-                                            <td className="p-2">
-                                                <select value={ev.status} onChange={e=>updImportEv(ev._id,'status',e.target.value)}
-                                                    className="border border-slate-200 rounded-xl p-1.5 text-xs outline-none bg-white focus:ring-2 focus:ring-blue-400 w-full">
-                                                    {ev.category==='Presale'
-                                                        ? <><option>Lead</option><option>Proposal</option><option>Bit</option><option>Won</option><option>Lost</option></>
-                                                        : <><option>In Progress</option><option>Done</option><option>Pending</option></>
-                                                    }
-                                                </select>
-                                            </td>
-                                            <td className="p-2">
-                                                <input type="text" value={ev.note} onChange={e=>updImportEv(ev._id,'note',e.target.value)}
-                                                    className="border border-slate-200 rounded-xl p-1.5 text-xs outline-none w-full min-w-[120px] focus:ring-2 focus:ring-blue-400"
-                                                    placeholder="หมายเหตุ..." />
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="p-6 border-t bg-slate-50 rounded-b-[2rem] flex gap-3 justify-end">
-                            <button onClick={()=>{setShowImportModal(false);setImportEvents([]);}}
-                                className="px-6 py-3 rounded-2xl text-xs font-black text-slate-500 bg-white border border-slate-200 hover:bg-slate-100 uppercase">ยกเลิก</button>
-                            <button onClick={handleImportSubmit} disabled={importSaving||!importEvents.some(e=>e.selected)}
-                                className="px-8 py-3 rounded-2xl text-xs font-black text-white bg-teal-600 hover:bg-teal-700 shadow-lg shadow-teal-100 uppercase transition-all disabled:opacity-50">
-                                {importSaving ? 'กำลัง Import...' : `✅ Import ${importEvents.filter(e=>e.selected).length} รายการ`}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
                 {showModal && (
                     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 text-left my-8">
